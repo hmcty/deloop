@@ -1,0 +1,5 @@
+project('bizzy', ['c'])
+cc = meson.get_compiler('c')
+pipewire_dep = dependency('libpipewire-0.3')
+m_dep = cc.find_library('m', required: false)
+executable('bizzy', 'src/main.c', dependencies: [pipewire_dep, m_dep])
