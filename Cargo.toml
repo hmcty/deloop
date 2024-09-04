@@ -1,0 +1,15 @@
+[package]
+name = "bizzy_gui"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+eframe = "0.28.1"
+egui = "0.28.1"
+env_logger = "0.11.5"
+libc = "0.2.158"
+
+[build-dependencies]
+cc = "1.1.15"
+pkg-config = "0.3.30"
+
