@@ -3,6 +3,8 @@ use libc::c_char;
 
 extern "C" {
     fn bizzy_init() -> i32;
+    fn bizzy_start() -> ();
+    fn bizzy_stop() -> ();
     fn bizzy_cleanup() -> ();
 }
 
@@ -37,6 +39,16 @@ impl Default for WavePlot {
 impl eframe::App for WavePlot {
     fn update(&mut self, ctx: &egui::Context, _: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
+            // Start / stop button
+            if ui.button("Start").clicked() {
+                unsafe {
+                    bizzy_start();
+                }
+            } else if ui.button("Stop").clicked() {
+                unsafe {
+                    bizzy_stop();
+                }
+            }
         });
     }
 }

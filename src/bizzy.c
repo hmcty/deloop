@@ -5,19 +5,21 @@
 #include <math.h>
 #include <signal.h>
 #include <unistd.h>
+#include <stdbool.h>
 #include <jack/jack.h>
 
 #include "bizzy.h"
 
 #define DEFAULT_NUM_CHANNELS 2
 
-static jack_client_t *client;
-static jack_port_t *output_ports[DEFAULT_NUM_CHANNELS];
-static jack_port_t *input_ports[DEFAULT_NUM_CHANNELS];
+static struct app_state_t {
+  bool initialized;
+  bool is_running;
 
-typedef struct {
- /* Empty */
-} app_data_t;
+  jack_client_t *client;
+  jack_port_t *output_ports[DEFAULT_NUM_CHANNELS];
+  jack_port_t *input_ports[DEFAULT_NUM_CHANNELS];
+} state_;
 
 /**
  * The process callback for this JACK application is called in a
@@ -29,12 +31,13 @@ typedef struct {
  */
 
 int process(jack_nframes_t nframes, void *arg) {
-  app_data_t *data = (app_data_t*) arg;
-  int i;
+  if (!state_.is_running) {
+    return 0;
+  }
 
-  for (i = 0; i < DEFAULT_NUM_CHANNELS; i++) {
-    float *out = (float *) jack_port_get_buffer(output_ports[i], nframes);
-    float *in = (float *) jack_port_get_buffer(input_ports[i], nframes);
+  for (int i = 0; i < DEFAULT_NUM_CHANNELS; i++) {
+    float *out = (float *) jack_port_get_buffer(state_.output_ports[i], nframes);
+    float *in = (float *) jack_port_get_buffer(state_.input_ports[i], nframes);
 
     memcpy(out, in, nframes * sizeof(float));
   }
@@ -48,12 +51,16 @@ int bizzy_init() {
 	const char *server_name = NULL;
 	jack_options_t options = JackNullOption;
 	jack_status_t status;
-	app_data_t data;
 	int i;
 
+  if (state_.initialized) {
+    return 0;
+  }
+  memset(&state_, 0, sizeof(state_));
+
 	/* open a client connection to the JACK server */
-	client = jack_client_open(client_name, options, &status, server_name);
-	if (client == NULL) {
+	state_.client = jack_client_open(client_name, options, &status, server_name);
+	if (state_.client == NULL) {
 		fprintf (stderr, "jack_client_open() failed, "
 			 "status = 0x%2.0x\n", status);
 		if (status & JackServerFailed) {
@@ -65,7 +72,7 @@ int bizzy_init() {
 		fprintf (stderr, "JACK server started\n");
 	}
 	if (status & JackNameNotUnique) {
-		client_name = jack_get_client_name(client);
+		client_name = jack_get_client_name(state_.client);
 		fprintf (stderr, "unique name `%s' assigned\n", client_name);
 	}
 
@@ -73,29 +80,29 @@ int bizzy_init() {
 	   there is work to be done.
 	*/
 
-	jack_set_process_callback(client, process, &data);
+	jack_set_process_callback(state_.client, process, NULL);
 
 	/* tell the JACK server to call `jack_shutdown()' if
 	   it ever shuts down, either entirely, or if it
 	   just decides to stop calling us.
 	*/
 
-	jack_on_shutdown(client, bizzy_cleanup, 0);
+	jack_on_shutdown(state_.client, bizzy_cleanup, 0);
 
 	/* create ports */
 
   for (i = 0; i < DEFAULT_NUM_CHANNELS; i++) {
-    output_ports[i] = jack_port_register (
-      client, "output",
+    state_.output_ports[i] = jack_port_register (
+      state_.client, "output",
       JACK_DEFAULT_AUDIO_TYPE,
       JackPortIsOutput, 0);
 
-    input_ports[i] = jack_port_register (
-      client, "input",
+    state_.input_ports[i] = jack_port_register (
+      state_.client, "input",
       JACK_DEFAULT_AUDIO_TYPE,
       JackPortIsInput, 0);
 
-    if ((output_ports[i] == NULL) || (input_ports[i] == NULL)) {
+    if ((state_.output_ports[i] == NULL) || (state_.input_ports[i] == NULL)) {
       fprintf(stderr, "no more JACK ports available\n");
       return 1;
     }
@@ -104,7 +111,7 @@ int bizzy_init() {
 	/* Tell the JACK server that we are ready to roll.  Our
 	 * process() callback will start running now. */
 
-	if (jack_activate(client)) {
+	if (jack_activate(state_.client)) {
 		fprintf (stderr, "cannot activate client");
     return 1;
 	}
@@ -117,39 +124,28 @@ int bizzy_init() {
 	 * it.
 	 */
  	
-	ports = jack_get_ports(client, NULL, NULL, JackPortIsPhysical | JackPortIsInput);
+	ports = jack_get_ports(
+    state_.client, NULL, NULL, JackPortIsPhysical | JackPortIsInput);
 	if (ports == NULL) {
 		fprintf(stderr, "no physical playback ports\n");
     return 1;
 	}
 
-//if (jack_connect(client, jack_port_name(output_port1), ports[0])) {
-//	fprintf (stderr, "cannot connect output ports\n");
-//}
-
-//if (jack_connect(client, jack_port_name(output_port1), ports[0])) {
-//	fprintf (stderr, "cannot connect output ports\n");
-//}
-
 	jack_free(ports);
-    
-  /* install a signal handler to properly quits jack client */
-  // signal(SIGQUIT, signal_handler);
-	// signal(SIGTERM, signal_handler);
-	// signal(SIGHUP, signal_handler);
-	// signal(SIGINT, signal_handler);
-
-	/* keep running until the Ctrl+C */
-
- // while (1) {
- //		sleep (1);
- // 	}
-
-	// jack_client_close(client);
+  state_.initialized = true;
   return 0;
 }
 
+void bizzy_start() {
+  state_.is_running = true;
+}
+
+void bizzy_stop() {
+  state_.is_running = false;
+}
+
 void bizzy_cleanup() {
-  jack_client_close(client);
+  jack_client_close(state_.client);
+  state_.initialized = false;
 }
 
