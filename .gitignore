@@ -32,3 +32,6 @@ packagecache
 
 *.pyc
 /*venv*
+
+Cargo.lock
+/target/
