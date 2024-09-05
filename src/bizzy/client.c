@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <stdio.h>
 #include <errno.h>
 #include <stdlib.h>
@@ -35,11 +36,12 @@ static struct app_state_t {
  */
 
 int process(jack_nframes_t nframes, void *arg) {
-  if (!state_.is_running) {
-    return 0;
-  }
-
-  bizzy_track_tick(state_.track, NULL, 0);
+  assert(DEFAULT_NUM_CHANNELS == 2);
+  bizzy_track_stereo_tick(
+    state_.track,
+    (float *) jack_port_get_buffer(state_.input_ports[0], nframes),
+    (float *) jack_port_get_buffer(state_.input_ports[1], nframes),
+    nframes);
 
   /*
   for (int i = 0; i < DEFAULT_NUM_CHANNELS; i++) {
@@ -49,6 +51,10 @@ int process(jack_nframes_t nframes, void *arg) {
     memcpy(out, in, nframes * sizeof(float));
   }
   */
+
+  float *out_FL = (float *) jack_port_get_buffer(state_.output_ports[0], nframes);
+  float *out_FR = (float *) jack_port_get_buffer(state_.output_ports[1], nframes);
+  bizzy_track_stereo_read(state_.track, out_FL, out_FR, nframes);
 
 	return 0;      
 }
@@ -99,21 +105,32 @@ int bizzy_init() {
 
 	/* create ports */
 
-  for (i = 0; i < DEFAULT_NUM_CHANNELS; i++) {
-    state_.output_ports[i] = jack_port_register (
-      state_.client, "output",
-      JACK_DEFAULT_AUDIO_TYPE,
-      JackPortIsOutput, 0);
+  state_.output_ports[0] = jack_port_register(
+    state_.client, "output_FL", JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
+  if (state_.output_ports[0] == NULL) {
+    fprintf(stderr, "no more JACK ports available\n");
+    return 1;
+  }
 
-    state_.input_ports[i] = jack_port_register (
-      state_.client, "input",
-      JACK_DEFAULT_AUDIO_TYPE,
-      JackPortIsInput, 0);
+  state_.output_ports[1] = jack_port_register(
+    state_.client, "output_FR", JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
+  if (state_.output_ports[1] == NULL) {
+    fprintf(stderr, "no more JACK ports available\n");
+    return 1;
+  }
 
-    if ((state_.output_ports[i] == NULL) || (state_.input_ports[i] == NULL)) {
-      fprintf(stderr, "no more JACK ports available\n");
-      return 1;
-    }
+  state_.input_ports[0] = jack_port_register(
+    state_.client, "input_FL", JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput, 0);
+  if (state_.input_ports[0] == NULL) {
+    fprintf(stderr, "no more JACK ports available\n");
+    return 1;
+  }
+
+  state_.input_ports[1] = jack_port_register(
+    state_.client, "input_FR", JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput, 0);
+  if (state_.input_ports[1] == NULL) {
+    fprintf(stderr, "no more JACK ports available\n");
+    return 1;
   }
 
 	/* Tell the JACK server that we are ready to roll.  Our
@@ -143,7 +160,7 @@ int bizzy_init() {
 
   jack_position_t pos;
   jack_transport_query(state_.client, &pos);
-  state_.track = bizzy_track_create(pos.frame_rate);
+  state_.track = bizzy_track_create(BIZZY_TRACK_TYPE_STEREO, pos.frame_rate);
 
   state_.initialized = true;
   return 0;
