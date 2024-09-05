@@ -8,7 +8,9 @@
 #include <stdbool.h>
 #include <jack/jack.h>
 
-#include "bizzy.h"
+#include "bizzy/track.h"
+
+#include "bizzy/client.h"
 
 #define DEFAULT_NUM_CHANNELS 2
 
@@ -19,6 +21,8 @@ static struct app_state_t {
   jack_client_t *client;
   jack_port_t *output_ports[DEFAULT_NUM_CHANNELS];
   jack_port_t *input_ports[DEFAULT_NUM_CHANNELS];
+
+  bizzy_track_t *track;
 } state_;
 
 /**
@@ -35,12 +39,16 @@ int process(jack_nframes_t nframes, void *arg) {
     return 0;
   }
 
+  bizzy_track_tick(state_.track, NULL, 0);
+
+  /*
   for (int i = 0; i < DEFAULT_NUM_CHANNELS; i++) {
     float *out = (float *) jack_port_get_buffer(state_.output_ports[i], nframes);
     float *in = (float *) jack_port_get_buffer(state_.input_ports[i], nframes);
 
     memcpy(out, in, nframes * sizeof(float));
   }
+  */
 
 	return 0;      
 }
@@ -132,6 +140,11 @@ int bizzy_init() {
 	}
 
 	jack_free(ports);
+
+  jack_position_t pos;
+  jack_transport_query(state_.client, &pos);
+  state_.track = bizzy_track_create(pos.frame_rate);
+
   state_.initialized = true;
   return 0;
 }
@@ -144,8 +157,13 @@ void bizzy_stop() {
   state_.is_running = false;
 }
 
+bizzy_track_t *bizzy_get_track() {
+  return state_.track;
+}
+
 void bizzy_cleanup() {
   jack_client_close(state_.client);
+  bizzy_track_free(state_.track);
   state_.initialized = false;
 }
 
