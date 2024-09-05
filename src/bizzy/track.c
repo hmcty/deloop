@@ -32,14 +32,15 @@ size_t bizzy_track_ringbuf_write(bizzy_track_ringbuf_t *rb, float *data, size_t 
     return 0;
   }
 
-  size_t nbytes = (end - rb->write) * sizeof(float);
+  cnt = end - rb->write;
+  size_t nbytes = cnt * sizeof(float);
   size_t bytes_written = memcpy(rb->buf + rb->write, data, nbytes); 
-  rb->write += bytes_written;
+  rb->write += cnt;
   return bytes_written;
 }
 
 size_t bizzy_track_ringbuf_read(bizzy_track_ringbuf_t *rb, float *data, size_t cnt) {
-  if (rb == NULL) return 0;
+  if ((rb == NULL) || (data == NULL)) return 0;
 
   size_t end = rb->read + cnt;
   if (end > rb->size) {
