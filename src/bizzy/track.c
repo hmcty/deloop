@@ -3,26 +3,98 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <assert.h>
 
 #include "jack/jack.h"
-#include "jack/ringbuffer.h"
 
 #include "bizzy/track.h"
 
-bizzy_track_t *bizzy_track_create(jack_nframes_t frame_rate) {
+bizzy_track_ringbuf_t *bizzy_track_ringbuf_create(size_t cnt) {
+  bizzy_track_ringbuf_t *rb =
+    (bizzy_track_ringbuf_t *) malloc(sizeof(bizzy_track_ringbuf_t));
+  assert(rb != NULL);
+
+  rb->buf = (float *) malloc(cnt * sizeof(float));
+  assert(rb->buf != NULL);
+
+  rb->size = cnt;
+  rb->read = 0;
+  rb->write = 0;
+
+  return rb;
+}
+
+size_t bizzy_track_ringbuf_write(bizzy_track_ringbuf_t *rb, float *data, size_t cnt) {
+  if ((rb == NULL) || (data == NULL)) return 0;
+
+  size_t end = rb->write + cnt;
+  if (end > rb->size) {
+    return 0;
+  }
+
+  size_t nbytes = (end - rb->write) * sizeof(float);
+  size_t bytes_written = memcpy(rb->buf + rb->write, data, nbytes); 
+  rb->write += bytes_written;
+  return bytes_written;
+}
+
+size_t bizzy_track_ringbuf_read(bizzy_track_ringbuf_t *rb, float *data, size_t cnt) {
+  if (rb == NULL) return 0;
+
+  size_t end = rb->read + cnt;
+  if (end > rb->size) {
+    end = rb->size;
+  }
+
+  size_t icnt = end - rb->read;
+  size_t nbytes = icnt * sizeof(float);
+  size_t bytes_read = memcpy(data, rb->buf + rb->read, nbytes); 
+  if (icnt < cnt) {
+    nbytes = (cnt - icnt) * sizeof(float);
+    bytes_read += memcpy(data + bytes_read, rb->buf, nbytes);
+    rb->read = bytes_read;
+  } else {
+    rb->read += icnt;
+  }
+
+  return bytes_read;
+}
+
+void bizzy_track_ringbuf_free(bizzy_track_ringbuf_t *rb) {
+  if (rb == NULL) return;
+  if (rb->buf != NULL) free(rb->buf);
+  free(rb);
+}
+
+bizzy_track_t *bizzy_track_create(bizzy_track_type_t type, jack_nframes_t frame_rate) {
   bizzy_track_t *track = (bizzy_track_t *) malloc(sizeof(bizzy_track_t));
+  track->type = type;
   track->frame_rate = frame_rate;
   track->duration_s = BIZZY_TRACK_DURATION_DEFAULT_S;
+  
+  size_t buf_size = BIZZY_TRACK_DURATION_DEFAULT_S * frame_rate; 
+  track->lrb = bizzy_track_ringbuf_create(buf_size);
+  
+  switch (type) {
+    case BIZZY_TRACK_TYPE_STEREO:
+      track->rrb = bizzy_track_ringbuf_create(buf_size);
+      break;
+    case BIZZY_TRACK_TYPE_MONO:
+      track->rrb = NULL;
+      break;
+    default:
+      printf("Invalid track type\n");
+      bizzy_track_free(track);
+      return NULL;
+  }
 
-  size_t ch_size = BIZZY_TRACK_DURATION_DEFAULT_S * frame_rate * sizeof(float);
-  track->rb = jack_ringbuffer_create(ch_size * BIZZY_TRACK_NUM_CHANNELS);
   return track;
 }
 
 void bizzy_track_free(bizzy_track_t *track) {
   if (track == NULL) return;
-
-  jack_ringbuffer_free(track->rb);
+  if (track->lrb != NULL) bizzy_track_ringbuf_free(track->lrb);
+  if (track->rrb != NULL) bizzy_track_ringbuf_free(track->rrb);
   free(track);
 }
 
@@ -52,8 +124,41 @@ bool bizzy_track_is_recording(bizzy_track_t *track) {
   return track->is_recording;
 }
 
-void bizzy_track_tick(bizzy_track_t *track, float *frames, size_t cnt) {
-  if (track == NULL) return;
+void bizzy_track_stereo_tick(
+  bizzy_track_t *track,
+  float *lin,
+  float *rin,
+  size_t cnt) {
+  if ((track == NULL) || !track->is_recording) return;
+  assert(track->type == BIZZY_TRACK_TYPE_STEREO);
 
-  /* TODO: Implement */
+  if (lin != NULL) {
+    assert(track->lrb != NULL && track->lrb->buf != NULL);
+    size_t bytes_written = bizzy_track_ringbuf_write(track->lrb, lin, cnt);
+  }
+
+  if (rin != NULL) {
+    assert(track->rrb != NULL && track->rrb->buf != NULL);
+    size_t bytes_written = bizzy_track_ringbuf_write(track->rrb, rin, cnt);
+  }
+}
+
+void bizzy_track_stereo_read(
+  bizzy_track_t *track,
+  float *lout,
+  float *rout,
+  size_t cnt) {
+  if (track == NULL) return;
+  assert(track->type == BIZZY_TRACK_TYPE_STEREO);
+
+  size_t nbytes = cnt * sizeof(float);
+  if (lout != NULL) {
+    assert(track->lrb != NULL && track->lrb->buf != NULL);
+    size_t bytes_read = bizzy_track_ringbuf_read(track->lrb, lout, cnt);
+  }
+
+  if (rout != NULL) {
+    assert(track->rrb != NULL && track->rrb->buf != NULL);
+    size_t bytes_read = bizzy_track_ringbuf_read(track->rrb, rout, cnt);
+  }
 }
