@@ -1,12 +1,17 @@
 use eframe::egui::{self, DragValue, Event, Vec2};
 use libc::c_char;
 
-extern "C" {
-    fn bizzy_init() -> i32;
-    fn bizzy_start() -> ();
-    fn bizzy_stop() -> ();
-    fn bizzy_cleanup() -> ();
-}
+// use bindings::{
+//  bizzy_cleanup,
+//  bizzy_get_track,
+//  bizzy_init,
+//  bizzy_track_start_recording,
+//  bizzy_track_stop_recording,
+//  bizzy_track_t,
+//};
+//
+
+include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
 fn main() -> eframe::Result {
     env_logger::init(); // Log to stderr (if you run with `RUST_LOG=debug`).
@@ -28,11 +33,15 @@ fn main() -> eframe::Result {
     Ok(())
 }
 
-struct WavePlot {}
+struct WavePlot {
+    track_1_recording: bool,
+}
 
 impl Default for WavePlot {
     fn default() -> Self {
-        Self {}
+        Self {
+            track_1_recording: false,
+        }
     }
 }
 
@@ -40,13 +49,18 @@ impl eframe::App for WavePlot {
     fn update(&mut self, ctx: &egui::Context, _: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
             // Start / stop button
-            if ui.button("Start").clicked() {
-                unsafe {
-                    bizzy_start();
-                }
-            } else if ui.button("Stop").clicked() {
-                unsafe {
-                    bizzy_stop();
+            if ui.checkbox(
+                &mut self.track_1_recording,
+                "Track 1 recording",
+            ).clicked() {
+                if self.track_1_recording {
+                    unsafe {
+                        bizzy_track_start_recording(bizzy_get_track());
+                    }
+                } else {
+                    unsafe {
+                        bizzy_track_stop_recording(bizzy_get_track());
+                    }
                 }
             }
         });
