@@ -12,6 +12,16 @@
 
 #include "bizzy/track.h"
 
+#define MAX(a,b)              \
+  ({ __typeof__ (a) _a = (a); \
+     __typeof__ (b) _b = (b); \
+     _a > _b ? _a : _b; })
+
+#define MIN(a,b)              \
+  ({ __typeof__ (a) _a = (a); \
+     __typeof__ (b) _b = (b); \
+     _a < _b ? _a : _b; })
+
 bizzy_track_ringbuf_t *bizzy_track_ringbuf_create(size_t cnt) {
   bizzy_track_ringbuf_t *rb =
     (bizzy_track_ringbuf_t *) malloc(sizeof(bizzy_track_ringbuf_t));
@@ -30,12 +40,11 @@ bizzy_track_ringbuf_t *bizzy_track_ringbuf_create(size_t cnt) {
 
 void bizzy_track_ringbuf_write(bizzy_track_ringbuf_t *rb, float *data, size_t cnt) {
   if ((rb == NULL) || (data == NULL)) return 0;
-
-  size_t end = rb->write + cnt;
-  if (end >= rb->size) {
+  if (rb->write >= rb->buf_size) {
     return 0;
   }
 
+  size_t end = MIN(rb->write + cnt, rb->buf_size);
   cnt = end - rb->write;
   size_t nbytes = cnt * sizeof(float);
   
@@ -48,12 +57,11 @@ void bizzy_track_ringbuf_write(bizzy_track_ringbuf_t *rb, float *data, size_t cn
 
 void bizzy_track_ringbuf_read(bizzy_track_ringbuf_t *rb, float *data, size_t cnt) {
   if ((rb == NULL) || (data == NULL)) return 0;
-
-  size_t end = rb->read + cnt;
-  if (end >= rb->size) {
-    end = rb->size;
+  if (rb->read >= rb->size) {
+    rb->read = 0;
   }
 
+  size_t end = MIN(rb->read + cnt, rb->size);
   size_t icnt = end - rb->read;
   size_t nbytes = icnt * sizeof(float);
 
@@ -175,12 +183,21 @@ void bizzy_track_stereo_tick(
   float *rin,
   size_t cnt) {
   if (track == NULL) return;
+  assert(track->type == BIZZY_TRACK_TYPE_STEREO);
+
   if (!track->is_recording) {
-    track->lrb->write = 0;
-    track->rrb->write = 0;
+    if (track->lrb != NULL && track->lrb->write > 0) {
+      track->lrb->size = track->lrb->write;
+      track->lrb->write = 0;
+    }
+
+    if (track->rrb != NULL && track->rrb->write > 0) {
+      track->rrb->size = track->rrb->write;
+      track->rrb->write = 0;
+    }
+
     return;
   }
-  assert(track->type == BIZZY_TRACK_TYPE_STEREO);
 
   if (lin != NULL) {
     assert(track->lrb != NULL && track->lrb->buf != NULL);

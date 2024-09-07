@@ -8,6 +8,7 @@
 #include <unistd.h>
 #include <stdbool.h>
 #include <jack/jack.h>
+#include <jack/midiport.h>
 
 #include "bizzy/logging.h"
 #include "bizzy/track.h"
@@ -23,6 +24,7 @@ static struct app_state_t {
   jack_client_t *client;
   jack_port_t *output_ports[DEFAULT_NUM_CHANNELS];
   jack_port_t *input_ports[DEFAULT_NUM_CHANNELS];
+  jack_port_t *control_port;
 
   bizzy_track_t *track1;
 } state_;
@@ -37,12 +39,32 @@ static struct app_state_t {
  */
 
 int process(jack_nframes_t nframes, void *arg) {
-  assert(DEFAULT_NUM_CHANNELS == 2);
+  jack_midi_data_t *ctrl_buffer;
+  jack_midi_event_t ctrl_event;
+  uint8_t *ctrl_event_data;
+  jack_nframes_t ctrl_event_count;
+
+  ctrl_buffer = jack_port_get_buffer(state_.control_port, nframes);
+  ctrl_event_count = jack_midi_get_event_count(ctrl_buffer); 
+  for (int i = 0; i < ctrl_event_count; i++) {
+    jack_midi_event_get(&ctrl_event, ctrl_buffer, i);
+    ctrl_event_data = ctrl_event.buffer;
+    if (ctrl_event.size != 3) continue;
+    if ((ctrl_event_data[0] & 0xB0) != 0xB0) continue;
+    if (ctrl_event_data[1] != 0x40) continue;
+    if (ctrl_event_data[2] == 0x7F) {
+      bizzy_track_start_recording(state_.track1);
+    } else {
+      bizzy_track_stop_recording(state_.track1);
+    }
+  }
+
+
   bizzy_track_stereo_tick(
     state_.track1,
     (float *) jack_port_get_buffer(state_.input_ports[0], nframes),
     (float *) jack_port_get_buffer(state_.input_ports[1], nframes),
-    nframes);
+    nframes);  
 
   /*
   for (int i = 0; i < DEFAULT_NUM_CHANNELS; i++) {
@@ -53,12 +75,13 @@ int process(jack_nframes_t nframes, void *arg) {
   }
   */
 
-  if (!state_.track1->is_playing) {
-    return 0;
-  }
-  float *out_FL = (float *) jack_port_get_buffer(state_.output_ports[0], nframes);
-  float *out_FR = (float *) jack_port_get_buffer(state_.output_ports[1], nframes);
-  bizzy_track_stereo_read(state_.track1, out_FL, out_FR, nframes);
+  // If playback not active, exit early
+  if (!state_.track1->is_playing) return 0;
+  bizzy_track_stereo_read(
+    state_.track1,
+    (float *) jack_port_get_buffer(state_.output_ports[0], nframes),
+    (float *) jack_port_get_buffer(state_.output_ports[1], nframes),
+    nframes);
 
 	return 0;      
 }
@@ -133,6 +156,13 @@ int bizzy_init() {
   state_.input_ports[1] = jack_port_register(
     state_.client, "input_FR", JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput, 0);
   if (state_.input_ports[1] == NULL) {
+    fprintf(stderr, "no more JACK ports available\n");
+    return 1;
+  }
+
+  state_.control_port = jack_port_register(
+    state_.client, "control", JACK_DEFAULT_MIDI_TYPE, JackPortIsInput, 0);
+  if (state_.control_port == NULL) {
     fprintf(stderr, "no more JACK ports available\n");
     return 1;
   }
