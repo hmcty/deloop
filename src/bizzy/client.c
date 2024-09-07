@@ -53,6 +53,9 @@ int process(jack_nframes_t nframes, void *arg) {
   }
   */
 
+  if (!state_.track1->is_playing) {
+    return 0;
+  }
   float *out_FL = (float *) jack_port_get_buffer(state_.output_ports[0], nframes);
   float *out_FR = (float *) jack_port_get_buffer(state_.output_ports[1], nframes);
   bizzy_track_stereo_read(state_.track1, out_FL, out_FR, nframes);
@@ -177,26 +180,6 @@ void bizzy_stop() {
 
 bizzy_track_t *bizzy_get_track() {
   return state_.track1;
-}
-
-void bizzy_set_track_duration(bizzy_track_t *track, uint32_t duration_s) {
-  assert(track == NULL);
-
-  bizzy_log_info("Setting track duration to %d seconds", duration_s);
-  size_t buf_size = duration_s * track->frame_rate;
-  assert(buf_size <= track->lrb->buf_size);
-  track->lrb->size = buf_size;
-
-  switch (track->type) {
-    case BIZZY_TRACK_TYPE_STEREO:
-      assert(buf_size <= track->rrb->buf_size);
-      track->rrb->size = buf_size;
-      break;
-    case BIZZY_TRACK_TYPE_MONO:
-      break;
-    default:
-      assert(false);
-  }
 }
 
 void bizzy_cleanup() {

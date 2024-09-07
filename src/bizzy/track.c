@@ -116,7 +116,37 @@ void bizzy_track_free(bizzy_track_t *track) {
 void bizzy_track_set_duration(bizzy_track_t *track, uint32_t duration_s) {
   if (track == NULL) return;
 
+  bizzy_log_info("Setting track duration to %d seconds", duration_s);
   track->duration_s = duration_s;
+  
+  size_t buf_size = duration_s * track->frame_rate;
+  assert(buf_size <= track->lrb->buf_size);
+  track->lrb->size = buf_size;
+
+  switch (track->type) {
+    case BIZZY_TRACK_TYPE_STEREO:
+      assert(buf_size <= track->rrb->buf_size);
+      track->rrb->size = buf_size;
+      break;
+    case BIZZY_TRACK_TYPE_MONO:
+      break;
+    default:
+      assert(false);
+  }
+}
+
+void bizzy_track_start_playing(bizzy_track_t *track) {
+  if (track == NULL) return;
+
+  printf("Starting playing\n");
+  track->is_playing = true;
+}
+
+void bizzy_track_stop_playing(bizzy_track_t *track) {
+  if (track == NULL) return;
+
+  printf("Stopping playing\n");
+  track->is_playing = false;
 }
 
 void bizzy_track_start_recording(bizzy_track_t *track) {
@@ -168,7 +198,7 @@ void bizzy_track_stereo_read(
   float *lout,
   float *rout,
   size_t cnt) {
-  if (track == NULL) return;
+  if ((track == NULL) || !track->is_playing) return;
   assert(track->type == BIZZY_TRACK_TYPE_STEREO);
 
   if (lout != NULL) {

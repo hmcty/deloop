@@ -36,6 +36,7 @@ typedef struct {
   jack_nframes_t frame_rate;
   uint32_t duration_s;
   bool is_recording;
+  bool is_playing;
 
   bizzy_track_ringbuf_t *lrb;
   bizzy_track_ringbuf_t *rrb; // Stereo only
@@ -46,6 +47,8 @@ bizzy_track_t *bizzy_track_create(
 void bizzy_track_free(bizzy_track_t *track);
 
 void bizzy_track_set_duration(bizzy_track_t *track, uint32_t duration_s);
+void bizzy_track_start_playing(bizzy_track_t *track);
+void bizzy_track_stop_playing(bizzy_track_t *track);
 void bizzy_track_start_recording(bizzy_track_t *track);
 void bizzy_track_stop_recording(bizzy_track_t *track);
 bool bizzy_track_is_recording(bizzy_track_t *track);
