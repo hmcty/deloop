@@ -9,6 +9,7 @@
 #include <stdbool.h>
 #include <jack/jack.h>
 
+#include "bizzy/logging.h"
 #include "bizzy/track.h"
 
 #include "bizzy/client.h"
@@ -23,7 +24,7 @@ static struct app_state_t {
   jack_port_t *output_ports[DEFAULT_NUM_CHANNELS];
   jack_port_t *input_ports[DEFAULT_NUM_CHANNELS];
 
-  bizzy_track_t *track;
+  bizzy_track_t *track1;
 } state_;
 
 /**
@@ -38,7 +39,7 @@ static struct app_state_t {
 int process(jack_nframes_t nframes, void *arg) {
   assert(DEFAULT_NUM_CHANNELS == 2);
   bizzy_track_stereo_tick(
-    state_.track,
+    state_.track1,
     (float *) jack_port_get_buffer(state_.input_ports[0], nframes),
     (float *) jack_port_get_buffer(state_.input_ports[1], nframes),
     nframes);
@@ -54,7 +55,7 @@ int process(jack_nframes_t nframes, void *arg) {
 
   float *out_FL = (float *) jack_port_get_buffer(state_.output_ports[0], nframes);
   float *out_FR = (float *) jack_port_get_buffer(state_.output_ports[1], nframes);
-  bizzy_track_stereo_read(state_.track, out_FL, out_FR, nframes);
+  bizzy_track_stereo_read(state_.track1, out_FL, out_FR, nframes);
 
 	return 0;      
 }
@@ -160,7 +161,7 @@ int bizzy_init() {
 
   jack_position_t pos;
   jack_transport_query(state_.client, &pos);
-  state_.track = bizzy_track_create(BIZZY_TRACK_TYPE_STEREO, pos.frame_rate);
+  state_.track1 = bizzy_track_create(BIZZY_TRACK_TYPE_STEREO, pos.frame_rate);
 
   state_.initialized = true;
   return 0;
@@ -175,12 +176,32 @@ void bizzy_stop() {
 }
 
 bizzy_track_t *bizzy_get_track() {
-  return state_.track;
+  return state_.track1;
+}
+
+void bizzy_set_track_duration(bizzy_track_t *track, uint32_t duration_s) {
+  assert(track == NULL);
+
+  bizzy_log_info("Setting track duration to %d seconds", duration_s);
+  size_t buf_size = duration_s * track->frame_rate;
+  assert(buf_size <= track->lrb->buf_size);
+  track->lrb->size = buf_size;
+
+  switch (track->type) {
+    case BIZZY_TRACK_TYPE_STEREO:
+      assert(buf_size <= track->rrb->buf_size);
+      track->rrb->size = buf_size;
+      break;
+    case BIZZY_TRACK_TYPE_MONO:
+      break;
+    default:
+      assert(false);
+  }
 }
 
 void bizzy_cleanup() {
   jack_client_close(state_.client);
-  bizzy_track_free(state_.track);
+  bizzy_track_free(state_.track1);
   state_.initialized = false;
 }
 
