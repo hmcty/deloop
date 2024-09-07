@@ -25,6 +25,7 @@ fn main() {
         .include("src")
         .file("src/bizzy/client.c")
         .file("src/bizzy/track.c")
+        .file("src/bizzy/logging.c")
         .compile("bizzy"); 
     println!("cargo:rerun-if-changed=src/bizzy.c");
     println!("cargo:rustc-link-lib=jack");

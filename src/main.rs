@@ -1,17 +1,10 @@
-use eframe::egui::{self, DragValue, Event, Vec2};
-use libc::c_char;
-
-// use bindings::{
-//  bizzy_cleanup,
-//  bizzy_get_track,
-//  bizzy_init,
-//  bizzy_track_start_recording,
-//  bizzy_track_stop_recording,
-//  bizzy_track_t,
-//};
-//
+#![allow(non_upper_case_globals)]
+#![allow(non_camel_case_types)]
+#![allow(non_snake_case)]
 
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
+
+use eframe::egui::{self, DragValue, Event, Vec2, Slider};
 
 fn main() -> eframe::Result {
     env_logger::init(); // Log to stderr (if you run with `RUST_LOG=debug`).
@@ -35,12 +28,14 @@ fn main() -> eframe::Result {
 
 struct WavePlot {
     track_1_recording: bool,
+    track_1_duration_s: u32,
 }
 
 impl Default for WavePlot {
     fn default() -> Self {
         Self {
             track_1_recording: false,
+            track_1_duration_s: 5,
         }
     }
 }
@@ -61,6 +56,19 @@ impl eframe::App for WavePlot {
                     unsafe {
                         bizzy_track_stop_recording(bizzy_get_track());
                     }
+                }
+            }
+
+            if ui.add(
+                Slider::new(&mut self.track_1_duration_s, 1..=30)
+                    .text("Duration (s)")
+            ).changed() {
+                unsafe {
+                    println!("Setting duration to {}", self.track_1_duration_s);
+                    bizzy_track_set_duration(
+                        bizzy_get_track(),
+                        self.track_1_duration_s,
+                    );
                 }
             }
         });

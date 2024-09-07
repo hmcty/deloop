@@ -6,8 +6,8 @@
 
 #include <jack/jack.h>
 
-#define BIZZY_TRACK_DURATION_MAX_S     ((uint32_t) 60)
-#define BIZZY_TRACK_DURATION_DEFAULT_S ((uint32_t) 30)
+#define BIZZY_TRACK_DURATION_MAX_S     ((uint32_t) 30)
+#define BIZZY_TRACK_DURATION_DEFAULT_S ((uint32_t) 5)
 
 typedef enum {
   BIZZY_TRACK_TYPE_INVALID,
@@ -17,15 +17,17 @@ typedef enum {
 
 typedef struct {
   float *buf;
-  size_t size;
+  size_t buf_size;
+
   size_t read;
   size_t write;
+  size_t size;
 } bizzy_track_ringbuf_t;
 
 bizzy_track_ringbuf_t *bizzy_track_ringbuf_create(size_t buf_size);
-size_t bizzy_track_ringbuf_write(
+void bizzy_track_ringbuf_write(
   bizzy_track_ringbuf_t *rb, float *data, size_t cnt);
-size_t bizzy_track_ringbuf_read(
+void bizzy_track_ringbuf_read(
   bizzy_track_ringbuf_t *rb, float *data, size_t cnt);
 void bizzy_track_ringbuf_free(bizzy_track_ringbuf_t *rb);
 
