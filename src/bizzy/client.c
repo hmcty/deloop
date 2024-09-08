@@ -16,6 +16,8 @@
 #include "bizzy/client.h"
 
 #define DEFAULT_NUM_CHANNELS 2
+#define MAX_NUM_PORTS 32
+#define MAX_PORT_NAME_LENGTH 64
 
 static struct app_state_t {
   bool initialized;
@@ -28,15 +30,6 @@ static struct app_state_t {
 
   bizzy_track_t *track1;
 } state_;
-
-/**
- * The process callback for this JACK application is called in a
- * special realtime thread once for each audio cycle.
- *
- * This client follows a simple rule: when the JACK transport is
- * running, write nframes sine wave samples to the two outputs ports.
- * When it stops, exit.
- */
 
 int process(jack_nframes_t nframes, void *arg) {
   jack_midi_data_t *ctrl_buffer;
@@ -65,15 +58,6 @@ int process(jack_nframes_t nframes, void *arg) {
     (float *) jack_port_get_buffer(state_.input_ports[0], nframes),
     (float *) jack_port_get_buffer(state_.input_ports[1], nframes),
     nframes);  
-
-  /*
-  for (int i = 0; i < DEFAULT_NUM_CHANNELS; i++) {
-    float *out = (float *) jack_port_get_buffer(state_.output_ports[i], nframes);
-    float *in = (float *) jack_port_get_buffer(state_.input_ports[i], nframes);
-
-    memcpy(out, in, nframes * sizeof(float));
-  }
-  */
 
   // If playback not active, exit early
   if (!state_.track1->is_playing) return 0;
@@ -182,19 +166,17 @@ int bizzy_init() {
 	 * "input" to the backend, and capture ports are "output" from
 	 * it.
 	 */
+
+  char **output_audio_ports = bizzy_get_output_audio_ports();
+  i = 0;
+  while (output_audio_ports[i] != NULL) {
+    bizzy_log_info("%s", output_audio_ports[i]);
+    i += 1;
+  }
  	
-	ports = jack_get_ports(
-    state_.client, NULL, NULL, JackPortIsPhysical | JackPortIsInput);
-	if (ports == NULL) {
-		fprintf(stderr, "no physical playback ports\n");
-    return 1;
-	}
-
-	jack_free(ports);
-
-  jack_position_t pos;
-  jack_transport_query(state_.client, &pos);
-  state_.track1 = bizzy_track_create(BIZZY_TRACK_TYPE_STEREO, pos.frame_rate);
+  state_.track1 = bizzy_track_create(
+    BIZZY_TRACK_TYPE_STEREO,
+    jack_get_sample_rate(state_.client));
 
   state_.initialized = true;
   return 0;
@@ -202,6 +184,26 @@ int bizzy_init() {
 
 void bizzy_start() {
   state_.is_running = true;
+}
+
+char **bizzy_get_output_audio_ports() {
+  // Update the list of output ports
+  return jack_get_ports(
+    state_.client, NULL, JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput);
+
+  //int i = 0;
+  //while (port_names[i] != NULL && i < MAX_NUM_PORTS) {
+  //  strncpy(state_.output_audio_ports[i], port_names[i], MAX_PORT_NAME_LENGTH);
+  //  i++;
+  //}
+  //for (; i < MAX_NUM_PORTS; i++) {
+  //  state_.output_audio_ports[i][0] = '\0';
+  //}
+  // jack_free(port_names);
+}
+
+void bizzy_port_list_free(char **port_list) {
+  jack_free(port_list);
 }
 
 void bizzy_stop() {

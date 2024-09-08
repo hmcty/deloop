@@ -177,6 +177,13 @@ bool bizzy_track_is_recording(bizzy_track_t *track) {
   return track->is_recording;
 }
 
+float bizzy_track_get_progress(bizzy_track_t *track) {
+  if (track == NULL) return 0.0;
+
+  float progress = (float) track->lrb->read / (float) track->lrb->size;
+  return progress;
+}
+
 void bizzy_track_stereo_tick(
   bizzy_track_t *track,
   float *lin,
