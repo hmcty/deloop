@@ -46,6 +46,8 @@ bizzy_track_t *bizzy_track_create(
   bizzy_track_type_t type, jack_nframes_t frame_rate);
 void bizzy_track_free(bizzy_track_t *track);
 
+float bizzy_track_get_progress(bizzy_track_t *track);
+
 void bizzy_track_set_duration(bizzy_track_t *track, uint32_t duration_s);
 void bizzy_track_start_playing(bizzy_track_t *track);
 void bizzy_track_stop_playing(bizzy_track_t *track);
