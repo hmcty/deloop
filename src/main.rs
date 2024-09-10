@@ -4,35 +4,55 @@
 
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
-use std::ffi::CStr;
+use std::ffi::{CStr, CString};
 use eframe::egui::{self, DragValue, Event, Vec2, Slider, ProgressBar, ComboBox};
+use std::collections::HashMap;
 
-fn get_track_audio_input_opts() -> Vec<String> {
-    let mut result = Vec::new();
+struct AudioDevice {
+    FL_port_name: Option<String>,
+    FR_port_name: Option<String>,
+}
+
+fn get_track_audio_input_opts() -> HashMap<String, AudioDevice> {
+    let mut result: HashMap<String, AudioDevice> = HashMap::new();
     unsafe{
-        let output_ports = bizzy_get_output_audio_ports();
-        if output_ports.is_null() {
-            panic!("Failed to find any output ports");
-        }
+        let mut output_ports = bizzy_client_find_output_devices();
+        while !output_ports.is_null() {
+            let client_name = CStr::from_ptr((*output_ports).client_name)
+                .to_str().unwrap().to_owned();
+            let port_name = CStr::from_ptr((*output_ports).port_name)
+                .to_str().unwrap().to_owned();
 
-        let mut i = 0;
-        while !(*output_ports.offset(i)).is_null() {
-            let c_str = CStr::from_ptr(*output_ports.offset(i));
-            if let Ok(s) = c_str.to_str() {
-                result.push(s.to_owned());
+            if (*output_ports).port_type == bizzy_device_port_t_BIZZY_DEVICE_PORT_TYPE_STEREO_FL {
+                result.entry(client_name.clone())
+                    .or_insert(AudioDevice {
+                        FL_port_name: Some(port_name.clone()),
+                        FR_port_name: None,
+                    }).FR_port_name = Some(port_name.clone());
+            } else if (*output_ports).port_type == bizzy_device_port_t_BIZZY_DEVICE_PORT_TYPE_STEREO_FR {
+                result.entry(client_name.clone())
+                    .or_insert(AudioDevice {
+                        FL_port_name: None,
+                        FR_port_name: Some(port_name.clone()),
+                    }).FL_port_name = Some(port_name.clone());
+            } else {
+                panic!("Unknown port type: {}", (*output_ports).port_type);
             }
-            i += 1;
+
+            println!("Client: {}, Port: {}", client_name, port_name);
+            output_ports = (*output_ports).last;
         }
 
-        bizzy_port_list_free(output_ports);
+        bizzy_client_device_list_free(output_ports);
     };
+
     result
 }
 
 fn main() -> eframe::Result {
     env_logger::init(); // Log to stderr (if you run with `RUST_LOG=debug`).
     unsafe { 
-        let ret = bizzy_init();
+        let ret = bizzy_client_init();
         if ret != 0 {
             panic!("Failed to initialize Bizzy");
         }
@@ -45,11 +65,12 @@ fn main() -> eframe::Result {
         Box::new(|_cc| Ok(Box::<WavePlot>::default())),
     );
 
-    unsafe { bizzy_cleanup() }
+    unsafe { bizzy_client_cleanup() }
     Ok(())
 }
 
 struct WavePlot {
+    audio_input_map: HashMap<String, AudioDevice>,
     audio_input_opts: Vec<String>, 
     track_1_input: String,
     track_1_playing: bool,
@@ -59,8 +80,11 @@ struct WavePlot {
 
 impl Default for WavePlot {
     fn default() -> Self {
+        let audio_input_map = get_track_audio_input_opts();
+        let audio_input_opts = audio_input_map.keys().cloned().collect();
         Self {
-            audio_input_opts: get_track_audio_input_opts(),
+            audio_input_map: audio_input_map,
+            audio_input_opts: audio_input_opts,
             track_1_input: "None".to_string(),
             track_1_playing: true,
             track_1_recording: false,
@@ -74,51 +98,51 @@ impl eframe::App for WavePlot {
         ctx.request_repaint(); // Run continously
         egui::CentralPanel::default().show(ctx, |ui| {
 
-            ComboBox::from_label("Input")
+            if ui.button("Update Devices").clicked() {
+                self.audio_input_map = get_track_audio_input_opts();
+                self.audio_input_opts = self.audio_input_map
+                    .keys().cloned().collect();
+            }
+
+            ComboBox::from_label("Input Device")
                 .selected_text(&self.track_1_input)
                 .show_ui(ui, |ui| {
-                for input in &self.audio_input_opts {
-                    ui.selectable_value(&mut self.track_1_input, input.to_string(), input);
-                }
-            });
+                    for input in &self.audio_input_opts {
+                        let value = ui.selectable_value(
+                            &mut self.track_1_input,
+                            input.to_string(),
+                            input);
+                        if value.clicked() {
+                            println!("Selected input: {}", input);
+                            unsafe {
+                                self.audio_input_map.get(input).map(|audio_device| {
+                                    let source_FL = audio_device.FL_port_name
+                                        .as_ref().map(String::as_str).unwrap();
+                                    let source_FR = audio_device.FR_port_name
+                                        .as_ref().map(String::as_str).unwrap();
+                                    bizzy_client_configure_source(
+                                        CString::new(source_FL).unwrap().as_ptr(),
+                                        CString::new(source_FR).unwrap().as_ptr(),
+                                    );
+                                });
+                            }
+                        }
+                    }
+                });
 
             if ui.checkbox(
                 &mut self.track_1_playing,
                 "Track 1 playing",
             ).clicked() {
                 if self.track_1_playing {
-                    unsafe { bizzy_track_start_playing(bizzy_get_track()); }
+                    unsafe { bizzy_track_start_playing(bizzy_client_get_track()); }
                 } else {
-                    unsafe { bizzy_track_stop_playing(bizzy_get_track()); }
+                    unsafe { bizzy_track_stop_playing(bizzy_client_get_track()); }
                 }
             }
 
-          //if ui.checkbox(
-          //    &mut self.track_1_recording,
-          //    "Track 1 recording",
-          //).clicked() {
-          //    if self.track_1_recording {
-          //        unsafe { bizzy_track_start_recording(bizzy_get_track()); }
-          //    } else {
-          //        unsafe { bizzy_track_stop_recording(bizzy_get_track()); }
-          //    }
-          //}
-
-          //if ui.add(
-          //    Slider::new(&mut self.track_1_duration_s, 1..=30)
-          //        .text("Duration (s)")
-          //).changed() {
-          //    unsafe {
-          //        println!("Setting duration to {}", self.track_1_duration_s);
-          //        bizzy_track_set_duration(
-          //            bizzy_get_track(),
-          //            self.track_1_duration_s,
-          //        );
-          //    }
-          //}
-
             let progress: f32 = unsafe {
-                bizzy_track_get_progress(bizzy_get_track())
+                bizzy_track_get_progress(bizzy_client_get_track())
             };
             ui.add(ProgressBar::new(progress));
         });
