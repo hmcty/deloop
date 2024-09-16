@@ -6,7 +6,7 @@
 
 #include <jack/jack.h>
 
-#define BIZZY_TRACK_DURATION_MAX_S     ((uint32_t) 30)
+#define BIZZY_TRACK_DURATION_MAX_S     ((uint32_t) 120)
 #define BIZZY_TRACK_DURATION_DEFAULT_S ((uint32_t) 5)
 
 typedef enum {

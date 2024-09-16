@@ -66,13 +66,21 @@ void bizzy_track_ringbuf_read(bizzy_track_ringbuf_t *rb, float *data, size_t cnt
   size_t nbytes = icnt * sizeof(float);
 
   assert(rb->buf != NULL);
-  memcpy(data, rb->buf + rb->read, nbytes); 
+  // memcpy(data, rb->buf + rb->read, nbytes); 
+  // Mix with existing data
+  for (size_t i = 0; i < icnt; i++) {
+    data[i] += rb->buf[rb->read + i];
+  }
 
   if (icnt < cnt) {
     nbytes = (cnt - icnt) * sizeof(float);
 
     assert(rb->buf != NULL);
-    memcpy(data + icnt, rb->buf, nbytes);
+    // memcpy(data + icnt, rb->buf, nbytes);
+    // Mix with existing data
+    for (size_t i = 0; i < (cnt - icnt); i++) {
+      data[icnt + i] += rb->buf[i];
+    }
 
     rb->read = (cnt - icnt); 
   } else {
@@ -155,10 +163,14 @@ void bizzy_track_stop_playing(bizzy_track_t *track) {
 
   printf("Stopping playing\n");
   track->is_playing = false;
+  if (track->lrb != NULL) track->lrb->read = 0;
+  if (track->rrb != NULL) track->rrb->read = 0;
 }
 
 void bizzy_track_start_recording(bizzy_track_t *track) {
   if (track == NULL) return;
+
+  bizzy_track_stop_playing(track);
 
   printf("Starting recording\n");
   track->is_recording = true;
@@ -169,6 +181,7 @@ void bizzy_track_stop_recording(bizzy_track_t *track) {
 
   printf("Stopping recording\n");
   track->is_recording = false;
+  bizzy_track_start_playing(track);
 }
 
 bool bizzy_track_is_recording(bizzy_track_t *track) {
