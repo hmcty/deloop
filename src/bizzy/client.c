@@ -18,6 +18,7 @@
 #define DEFAULT_NUM_CHANNELS 2
 #define MAX_NUM_PORTS 32
 #define MAX_PORT_NAME_LENGTH 64
+#define MAX_NUM_TRACKS 32
 
 static struct app_state_t {
   bool initialized;
@@ -29,7 +30,9 @@ static struct app_state_t {
   jack_port_t *input_FR;
   jack_port_t *control_port;
 
-  bizzy_track_t *track1;
+  uint32_t num_tracks;
+  uint32_t focus_track;
+  bizzy_track_t *track_list[MAX_NUM_TRACKS];
 } state_;
 
 int process(jack_nframes_t nframes, void *arg) {
@@ -37,6 +40,15 @@ int process(jack_nframes_t nframes, void *arg) {
   jack_midi_event_t ctrl_event;
   uint8_t *ctrl_event_data;
   jack_nframes_t ctrl_event_count;
+  bizzy_track_t *track;
+
+  if (!state_.initialized
+    || state_.num_tracks == 0
+    || state_.focus_track >= state_.num_tracks
+    || (track = state_.track_list[state_.focus_track]) == NULL) {
+    return 0;
+  }
+  track = state_.track_list[state_.focus_track];
 
   ctrl_buffer = jack_port_get_buffer(state_.control_port, nframes);
   ctrl_event_count = jack_midi_get_event_count(ctrl_buffer); 
@@ -47,27 +59,33 @@ int process(jack_nframes_t nframes, void *arg) {
     if ((ctrl_event_data[0] & 0xB0) != 0xB0) continue;
     if (ctrl_event_data[1] != 0x40) continue;
     if (ctrl_event_data[2] == 0x7F) {
-      bizzy_track_start_recording(state_.track1);
+      bizzy_track_start_recording(track);
     } else {
-      bizzy_track_stop_recording(state_.track1);
+      bizzy_track_stop_recording(track);
     }
   }
 
 
   bizzy_track_stereo_tick(
-    state_.track1,
+    track,
     (float *) jack_port_get_buffer(state_.input_FL, nframes),
     (float *) jack_port_get_buffer(state_.input_FR, nframes),
     nframes);  
 
-  // If playback not active, exit early
-  if (!state_.track1->is_playing) return 0;
-  bizzy_track_stereo_read(
-    state_.track1,
-    (float *) jack_port_get_buffer(state_.output_FL, nframes),
-    (float *) jack_port_get_buffer(state_.output_FR, nframes),
-    nframes);
+  memset(jack_port_get_buffer(state_.output_FL, nframes), 0, nframes * sizeof(float));
+  memset(jack_port_get_buffer(state_.output_FR, nframes), 0, nframes * sizeof(float));
 
+  // If playback not active, exit early
+  for (uint32_t i = 0; i < state_.num_tracks; i++) {
+    if (state_.track_list[i] == NULL) continue;
+    if (!state_.track_list[i]->is_playing) break;
+
+    bizzy_track_stereo_read(
+      state_.track_list[i],
+      (float *) jack_port_get_buffer(state_.output_FL, nframes),
+      (float *) jack_port_get_buffer(state_.output_FR, nframes),
+      nframes);
+  }
 	return 0;      
 }
 
@@ -168,55 +186,97 @@ int bizzy_client_init() {
 	 * it.
 	 */
 
-  state_.track1 = bizzy_track_create(
-    BIZZY_TRACK_TYPE_STEREO,
-    jack_get_sample_rate(state_.client));
+//state_.track1 = bizzy_track_create(
+//  BIZZY_TRACK_TYPE_STEREO,
+//  jack_get_sample_rate(state_.client));
 
   state_.initialized = true;
   return 0;
 }
 
-bizzy_device_t *bizzy_client_find_output_devices(size_t *num_devices) {
+bizzy_device_t *bizzy_client_find_audio_devices(bool is_input, bool is_output) {
   bizzy_device_t *devices = NULL;
   char **port_names = NULL;
+  unsigned long port_flags = 0;
   int num_ports = 0;
 
+  if (is_input) port_flags |= JackPortIsInput;
+  if (is_output) port_flags |= JackPortIsOutput;
   port_names = jack_get_ports(
-    state_.client, NULL, JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput);
+    state_.client, NULL, JACK_DEFAULT_AUDIO_TYPE, port_flags);
   if (port_names == NULL) {
     return NULL;
   }
   while (port_names[num_ports] != NULL) {
     // Split port name into client and port via ":"
-    char *pch = strpbrk(port_names[num_ports], ":");
-    if (pch == NULL) {
+    char *ch = strpbrk(port_names[num_ports], ":");
+    if (ch == NULL) {
       num_ports += 1;
       continue;
     }
 
-    bool is_left_output = strcmp(pch + 1, "output_FL") == 0;
-    bool is_right_output = strcmp(pch + 1, "output_FR") == 0;
+    bizzy_device_type_t device_type;
+    bizzy_device_port_type_t port_type;
+    if (strcmp(ch + 1, "output_FL") == 0) {
+      device_type = BIZZY_DEVICE_TYPE_AUDIO_OUTPUT;
+      port_type = BIZZY_DEVICE_PORT_TYPE_STEREO_FL;
+    } else if (strcmp(ch + 1, "output_FR") == 0) {
+      device_type = BIZZY_DEVICE_TYPE_AUDIO_OUTPUT;
+      port_type = BIZZY_DEVICE_PORT_TYPE_STEREO_FR;
+    } else if (strcmp(ch + 1, "playback_FL") == 0) {
+      device_type = BIZZY_DEVICE_TYPE_AUDIO_INPUT;
+      port_type = BIZZY_DEVICE_PORT_TYPE_STEREO_FL;
+    } else if (strcmp(ch + 1, "playback_FR") == 0) {
+      device_type = BIZZY_DEVICE_TYPE_AUDIO_INPUT;
+      port_type = BIZZY_DEVICE_PORT_TYPE_STEREO_FR;
+    } else {
+      num_ports += 1;
+      continue;
+    }
+
     jack_port_t *port = jack_port_by_name(state_.client, port_names[num_ports]);
-    if ((!is_left_output && !is_right_output) || port == NULL) {
+    if (port == NULL) {
       num_ports += 1;
       continue;
     }
 
     bizzy_device_t *device = malloc(sizeof(bizzy_device_t)); 
-    device->type = BIZZY_DEVICE_TYPE_AUDIO_OUTPUT;
-    if (is_left_output) {
-      device->port_type = BIZZY_DEVICE_PORT_TYPE_STEREO_FL;
-    } else {
-      device->port_type = BIZZY_DEVICE_PORT_TYPE_STEREO_FR;
-    }
+    device->type = device_type;
+    device->port_type = port_type;
     device->port_name = strdup(port_names[num_ports]);
-    device->client_name = strndup(port_names[num_ports], pch - port_names[num_ports]);
+    device->client_name = strndup(port_names[num_ports], ch - port_names[num_ports]);
     device->last = devices;
     devices = device;
     num_ports += 1;
   }
-  jack_free(port_names);
 
+  jack_free(port_names);
+  return devices;
+}
+
+bizzy_device_t *bizzy_client_find_midi_devices() {
+  bizzy_device_t *devices = NULL;
+  char **port_names = NULL;
+  unsigned long port_flags = 0;
+  int num_ports = 0;
+
+  port_names = jack_get_ports(
+    state_.client, NULL, JACK_DEFAULT_MIDI_TYPE, JackPortIsOutput);
+  if (port_names == NULL) {
+    return NULL;
+  }
+  while (port_names[num_ports] != NULL) {
+    bizzy_device_t *device = malloc(sizeof(bizzy_device_t)); 
+    device->type = BIZZY_DEVICE_TYPE_MIDI_OUTPUT;
+    device->port_type = BIZZY_DEVICE_PORT_TYPE_MONO;
+    device->port_name = strdup(port_names[num_ports]);
+    device->client_name = strdup(port_names[num_ports]);
+    device->last = devices;
+    devices = device;
+    num_ports += 1;
+  }
+
+  jack_free(port_names);
   return devices;
 }
 
@@ -230,8 +290,47 @@ void bizzy_client_device_list_free(bizzy_device_t *devices) {
   }
 }
 
-bizzy_track_t *bizzy_client_get_track() {
-  return state_.track1;
+bizzy_track_t *bizzy_client_get_track(bizzy_client_track_id_t track_num) {
+  if (track_num >= state_.num_tracks) {
+    bizzy_log_error("Invalid track number: %u", track_num);
+    return NULL;
+  } else if (state_.track_list[track_num] == NULL) {
+    bizzy_log_error("Track %u is NULL", track_num);
+    return NULL;
+  }
+
+  return state_.track_list[track_num];
+}
+
+bizzy_client_track_id_t bizzy_client_get_num_tracks() {
+  return state_.num_tracks;
+}
+
+bizzy_client_track_id_t bizzy_client_add_track() {
+  if (state_.num_tracks >= MAX_NUM_TRACKS) {
+    bizzy_log_error("Max number of tracks reached: %u", MAX_NUM_TRACKS);
+    return UINT32_MAX;
+  }
+
+  bizzy_track_t *track = bizzy_track_create(
+    BIZZY_TRACK_TYPE_STEREO,
+    jack_get_sample_rate(state_.client));
+  state_.track_list[state_.num_tracks] = track;
+  state_.num_tracks += 1;
+  return state_.num_tracks - 1;
+}
+
+void bizzy_client_set_focused_track(bizzy_client_track_id_t track_num) {
+  if (track_num >= state_.num_tracks) {
+    bizzy_log_error("Invalid track number: %u", track_num);
+    return;
+  }
+
+  state_.focus_track = track_num;
+}
+
+bizzy_client_track_id_t bizzy_client_get_focused_track() {
+  return state_.focus_track;
 }
 
 void bizzy_client_configure_source(const char *source_FL, const char *source_FR) {
@@ -250,9 +349,18 @@ void bizzy_client_configure_sink(const char *sink_FL, const char *sink_FR) {
   jack_connect(state_.client, jack_port_name(state_.output_FR), sink_FR);
 }
 
+void bizzy_client_configure_control(const char *control) {
+  // @todo(hmcty): Check return values
+  jack_port_disconnect(state_.client, state_.control_port);
+  jack_connect(state_.client, control, jack_port_name(state_.control_port));
+}
+
 void bizzy_client_cleanup() {
   jack_client_close(state_.client);
-  bizzy_track_free(state_.track1);
+  for (uint32_t i = 0; i < state_.num_tracks; i++) {
+    if (state_.track_list[i] == NULL) continue;
+    bizzy_track_free(state_.track_list[i]);
+  }
   state_.initialized = false;
 }
 
