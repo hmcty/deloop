@@ -286,7 +286,7 @@ impl eframe::App for WavePlot {
                             repeat,
                             modifiers,
                         } => {
-                            if *pressed {
+                            if pressed {
                                 match key {
                                     egui::Key::Num0 => {
                                         unsafe {
@@ -296,11 +296,6 @@ impl eframe::App for WavePlot {
                                     egui::Key::Num1 => {
                                         unsafe {
                                             bizzy_client_set_focused_track(1);
-                                        }
-                                    },
-                                    egui::Key::Num2 => {
-                                        unsafe {
-                                            bizzy_client_set_focused_track(2);
                                         }
                                     },
                                     _ => {}
