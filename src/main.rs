@@ -4,7 +4,7 @@
 
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
-use eframe::egui::{self, ComboBox, DragValue, Event, ProgressBar, Slider, Vec2};
+use eframe::egui::{self, ComboBox, Event, ProgressBar};
 use std::collections::HashMap;
 use std::ffi::{CStr, CString};
 
@@ -97,11 +97,11 @@ fn get_track_audio_opts(result: &mut HashMap<String, AudioDevice>, is_input: boo
     };
 }
 
-fn truncate_string(s: &String, max_len: usize) -> String {
+fn truncate_string(s: &str, max_len: usize) -> String {
     if s.len() > max_len {
         format!("{}...", &s[..max_len])
     } else {
-        s.clone()
+        s.to_string()
     }
 }
 
@@ -119,7 +119,8 @@ fn main() -> eframe::Result {
         "Plot",
         options,
         Box::new(|_cc| Ok(Box::<WavePlot>::default())),
-    );
+    )
+    .unwrap();
 
     unsafe { deloop_client_cleanup() }
     Ok(())
@@ -127,28 +128,17 @@ fn main() -> eframe::Result {
 
 struct TrackInterface {
     track_id: u32,
-    track_playing: bool,
-    track_recording: bool,
-    track_duration_s: u32,
 }
 
 impl TrackInterface {
     fn new() -> TrackInterface {
-        let mut track_id = 0;
-        unsafe {
-            track_id = deloop_client_add_track();
-        }
+        let track_id = unsafe { deloop_client_add_track() };
         // @TODO: Make IDs non-zero random hashes.
         // if track_id == 0 {
         //    panic!("Failed to create track");
         // }
 
-        TrackInterface {
-            track_id: track_id,
-            track_playing: false,
-            track_recording: false,
-            track_duration_s: 0,
-        }
+        TrackInterface { track_id }
     }
 
     fn show(&mut self, ui: &mut egui::Ui) {
@@ -196,19 +186,18 @@ impl Default for WavePlot {
         let mut midi_control_map = HashMap::new();
         get_track_midi_opts(&mut midi_control_map);
 
-        let mut tracks = Vec::new();
-        tracks.push(TrackInterface::new());
+        let tracks = vec![TrackInterface::new()];
 
         Self {
-            audio_input_map: audio_input_map,
+            audio_input_map,
 
-            audio_output_map: audio_output_map,
+            audio_output_map,
             output_device: "None".to_string(),
 
-            midi_control_map: midi_control_map,
+            midi_control_map,
             control_device: "None".to_string(),
 
-            tracks: tracks,
+            tracks,
         }
     }
 }
@@ -221,27 +210,19 @@ impl eframe::App for WavePlot {
             ui.label("Input Devices");
             for (client, device) in &mut self.audio_input_map {
                 if ui.checkbox(&mut device.is_selected, client).clicked() {
-                    if device.is_selected {
-                        unsafe {
+                    unsafe {
+                        if device.is_selected {
                             let source_FL =
-                                device.FL_port_name.as_ref().map(String::as_str).unwrap();
+                                CString::new(device.FL_port_name.as_deref().unwrap()).unwrap();
                             let source_FR =
-                                device.FR_port_name.as_ref().map(String::as_str).unwrap();
-                            deloop_client_add_source(
-                                CString::new(source_FL).unwrap().as_ptr(),
-                                CString::new(source_FR).unwrap().as_ptr(),
-                            );
-                        }
-                    } else {
-                        unsafe {
+                                CString::new(device.FR_port_name.as_deref().unwrap()).unwrap();
+                            deloop_client_add_source(source_FL.as_ptr(), source_FR.as_ptr());
+                        } else {
                             let source_FL =
-                                device.FL_port_name.as_ref().map(String::as_str).unwrap();
+                                CString::new(device.FL_port_name.as_deref().unwrap()).unwrap();
                             let source_FR =
-                                device.FR_port_name.as_ref().map(String::as_str).unwrap();
-                            deloop_client_remove_source(
-                                CString::new(source_FL).unwrap().as_ptr(),
-                                CString::new(source_FR).unwrap().as_ptr(),
-                            );
+                                CString::new(device.FR_port_name.as_deref().unwrap()).unwrap();
+                            deloop_client_remove_source(source_FL.as_ptr(), source_FR.as_ptr());
                         }
                     }
                 }
@@ -260,13 +241,10 @@ impl eframe::App for WavePlot {
                         if value.clicked() {
                             unsafe {
                                 let sink_FL =
-                                    device.FL_port_name.as_ref().map(String::as_str).unwrap();
+                                    CString::new(device.FL_port_name.as_deref().unwrap()).unwrap();
                                 let sink_FR =
-                                    device.FR_port_name.as_ref().map(String::as_str).unwrap();
-                                deloop_client_configure_sink(
-                                    CString::new(sink_FL).unwrap().as_ptr(),
-                                    CString::new(sink_FR).unwrap().as_ptr(),
-                                );
+                                    CString::new(device.FR_port_name.as_deref().unwrap()).unwrap();
+                                deloop_client_configure_sink(sink_FL.as_ptr(), sink_FR.as_ptr());
                             }
                         }
                     }
@@ -283,10 +261,8 @@ impl eframe::App for WavePlot {
                         );
                         if value.clicked() {
                             unsafe {
-                                let control_port = device.port_name.as_str();
-                                deloop_client_configure_control(
-                                    CString::new(control_port).unwrap().as_ptr(),
-                                );
+                                let control_port = CString::new(device.port_name.as_str()).unwrap();
+                                deloop_client_configure_control(control_port.as_ptr());
                             }
                         }
                     }
@@ -310,36 +286,34 @@ impl eframe::App for WavePlot {
 
             ui.input(|i| {
                 for event in &i.raw.events {
-                    match event {
-                        Event::Key {
-                            key,
-                            physical_key,
-                            pressed,
-                            repeat,
-                            modifiers,
-                        } => {
-                            if *pressed {
-                                match key {
-                                    egui::Key::Num0 => unsafe {
-                                        deloop_client_set_focused_track(0);
-                                    },
-                                    egui::Key::Num1 => unsafe {
-                                        deloop_client_set_focused_track(1);
-                                    },
-                                    egui::Key::Num2 => unsafe {
-                                        deloop_client_set_focused_track(2);
-                                    },
-                                    egui::Key::Num3 => unsafe {
-                                        deloop_client_set_focused_track(3);
-                                    },
-                                    egui::Key::Num4 => unsafe {
-                                        deloop_client_set_focused_track(4);
-                                    },
-                                    _ => {}
-                                }
+                    if let Event::Key {
+                        key,
+                        physical_key: _,
+                        pressed,
+                        repeat: _,
+                        modifiers: _,
+                    } = event
+                    {
+                        if *pressed {
+                            match key {
+                                egui::Key::Num0 => unsafe {
+                                    deloop_client_set_focused_track(0);
+                                },
+                                egui::Key::Num1 => unsafe {
+                                    deloop_client_set_focused_track(1);
+                                },
+                                egui::Key::Num2 => unsafe {
+                                    deloop_client_set_focused_track(2);
+                                },
+                                egui::Key::Num3 => unsafe {
+                                    deloop_client_set_focused_track(3);
+                                },
+                                egui::Key::Num4 => unsafe {
+                                    deloop_client_set_focused_track(4);
+                                },
+                                _ => {}
                             }
                         }
-                        _ => {}
                     }
                 }
             });
