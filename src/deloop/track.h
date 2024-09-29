@@ -35,10 +35,10 @@ typedef struct {
 
 deloop_track_ringbuf_t *deloop_track_ringbuf_create(size_t buf_size);
 void deloop_track_ringbuf_reset(deloop_track_ringbuf_t *rb);
-size_t deloop_track_ringbuf_write(deloop_track_ringbuf_t *rb, float *data,
-                                  size_t cnt, bool overdub);
-void deloop_track_ringbuf_read(deloop_track_ringbuf_t *rb, float *data,
-                               size_t cnt);
+float deloop_track_ringbuf_write(deloop_track_ringbuf_t *rb, float *data,
+                                 size_t cnt, bool overdub);
+float deloop_track_ringbuf_read(deloop_track_ringbuf_t *rb, float *data,
+                                size_t cnt);
 void deloop_track_ringbuf_free(deloop_track_ringbuf_t *rb);
 
 typedef struct {
@@ -46,6 +46,8 @@ typedef struct {
   deloop_track_state_t state;
   jack_nframes_t frame_rate;
   uint32_t duration_s;
+  float ramp;
+  float wamp;
 
   deloop_track_ringbuf_t *lrb;
   deloop_track_ringbuf_t *rrb; // Stereo only

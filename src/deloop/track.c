@@ -52,10 +52,10 @@ void deloop_track_ringbuf_reset(deloop_track_ringbuf_t *rb) {
   rb->write = 0;
 }
 
-size_t deloop_track_ringbuf_write(deloop_track_ringbuf_t *rb, float *data,
-                                  size_t cnt, bool overdub) {
+float deloop_track_ringbuf_write(deloop_track_ringbuf_t *rb, float *data,
+                                 size_t cnt, bool overdub) {
   if ((rb == NULL) || (data == NULL))
-    return 0;
+    return 0.0;
 
   // If overdubbing, only write up to the buffer size
   size_t max_size = overdub ? rb->size : rb->buf_size;
@@ -63,22 +63,25 @@ size_t deloop_track_ringbuf_write(deloop_track_ringbuf_t *rb, float *data,
     if (overdub) {
       rb->write = 0;
     } else {
-      return 0;
+      return 0.0;
     }
   }
 
+  float amp = 0.0;
   size_t end = MIN(rb->write + cnt, max_size);
   size_t icnt = end - rb->write;
   size_t nbytes = cnt * sizeof(float);
 
   assert(rb->buf != NULL);
   for (size_t i = 0; i < icnt; i++) {
+    amp += data[i];
     rb->buf[rb->write + i] += data[i];
   }
 
   if (overdub && icnt < cnt) {
     assert(rb->buf != NULL);
     for (size_t i = 0; i < (cnt - icnt); i++) {
+      amp += data[icnt + i];
       rb->buf[i] += data[icnt + i];
     }
 
@@ -88,17 +91,19 @@ size_t deloop_track_ringbuf_write(deloop_track_ringbuf_t *rb, float *data,
   }
   rb->size = MAX(rb->size, rb->write);
 
-  return cnt;
+  amp /= cnt;
+  return amp;
 }
 
-void deloop_track_ringbuf_read(deloop_track_ringbuf_t *rb, float *data,
-                               size_t cnt) {
+float deloop_track_ringbuf_read(deloop_track_ringbuf_t *rb, float *data,
+                                size_t cnt) {
   if ((rb == NULL) || (data == NULL))
     return 0;
   if (rb->read >= rb->size) {
     rb->read = 0;
   }
 
+  float amp = 0.0;
   size_t end = MIN(rb->read + cnt, rb->size);
   size_t icnt = end - rb->read;
   size_t nbytes = icnt * sizeof(float);
@@ -108,6 +113,7 @@ void deloop_track_ringbuf_read(deloop_track_ringbuf_t *rb, float *data,
   // Mix with existing data
   for (size_t i = 0; i < icnt; i++) {
     data[i] += rb->buf[rb->read + i];
+    amp += data[i];
   }
 
   if (icnt < cnt) {
@@ -118,6 +124,7 @@ void deloop_track_ringbuf_read(deloop_track_ringbuf_t *rb, float *data,
     // Mix with existing data
     for (size_t i = 0; i < (cnt - icnt); i++) {
       data[icnt + i] += rb->buf[i];
+      amp += data[icnt + i];
     }
 
     rb->read = (cnt - icnt);
@@ -125,7 +132,7 @@ void deloop_track_ringbuf_read(deloop_track_ringbuf_t *rb, float *data,
     rb->read += icnt;
   }
 
-  return 0;
+  return amp / cnt;
 }
 
 void deloop_track_ringbuf_free(deloop_track_ringbuf_t *rb) {
@@ -144,7 +151,7 @@ deloop_track_t *deloop_track_create(deloop_track_type_t type,
   track->frame_rate = frame_rate;
   track->duration_s = DELOOP_TRACK_DURATION_DEFAULT_S;
 
-  size_t buf_size = DELOOP_TRACK_DURATION_DEFAULT_S * frame_rate;
+  size_t buf_size = DELOOP_TRACK_DURATION_MAX_S * frame_rate;
   DELOOP_LOG_INFO("Creating track with buffer size %lu\n", buf_size);
 
   track->lrb = deloop_track_ringbuf_create(buf_size);
@@ -186,34 +193,37 @@ void deloop_track_reset(deloop_track_t *track) {
 }
 
 void deloop_track_handle_action(deloop_track_t *track) {
+  static deloop_track_state_t last_state = DELOOP_TRACK_STATE_AWAITING;
   static time_t last_action_time = 0;
   if (track == NULL)
     return;
 
-  switch (track->state) {
-  case DELOOP_TRACK_STATE_AWAITING:
-    deloop_track_start_recording(track);
-    break;
-  case DELOOP_TRACK_STATE_PLAYING:
-    deloop_track_stop_playing(track);
-    break;
-  case DELOOP_TRACK_STATE_PAUSED:
-    if (difftime(time(NULL), last_action_time) < 1.0f) {
-      deloop_track_reset(track);
-    } else {
+  if (last_state != DELOOP_TRACK_STATE_RECORDING &&
+      difftime(time(NULL), last_action_time) < 1.0f) {
+    deloop_track_reset(track);
+  } else {
+    switch (track->state) {
+    case DELOOP_TRACK_STATE_AWAITING:
+      deloop_track_start_recording(track);
+      break;
+    case DELOOP_TRACK_STATE_PLAYING:
+      deloop_track_stop_playing(track);
+      break;
+    case DELOOP_TRACK_STATE_PAUSED:
       deloop_track_start_playing(track);
+      break;
+    case DELOOP_TRACK_STATE_RECORDING:
+      deloop_track_stop_recording(track);
+      break;
+    case DELOOP_TRACK_STATE_OVERDUBBING:
+      deloop_track_start_playing(track);
+      break;
+    default:
+      break;
     }
-    break;
-  case DELOOP_TRACK_STATE_RECORDING:
-    deloop_track_stop_recording(track);
-    break;
-  case DELOOP_TRACK_STATE_OVERDUBBING:
-    deloop_track_start_playing(track);
-    break;
-  default:
-    break;
   }
   last_action_time = time(NULL);
+  last_state = track->state;
 }
 
 void deloop_track_start_playing(deloop_track_t *track) {
@@ -293,20 +303,22 @@ void deloop_track_stereo_tick(deloop_track_t *track, float *lin, float *rin,
     }
   }
 
+  float wamp = 0.0;
   if (deloop_track_is_recording(track)) {
     if (lin != NULL) {
       assert(track->lrb != NULL && track->lrb->buf != NULL);
-      deloop_track_ringbuf_write(
+      wamp += deloop_track_ringbuf_write(
           track->lrb, lin, cnt, track->state == DELOOP_TRACK_STATE_OVERDUBBING);
     }
 
     if (rin != NULL) {
       assert(track->rrb != NULL && track->rrb->buf != NULL);
-      deloop_track_ringbuf_write(
+      wamp += deloop_track_ringbuf_write(
           track->rrb, rin, cnt, track->state == DELOOP_TRACK_STATE_OVERDUBBING);
     }
   }
 
+  track->wamp = wamp / 2.0;
   last_state = track->state;
 }
 
@@ -319,13 +331,16 @@ void deloop_track_stereo_read(deloop_track_t *track, float *lout, float *rout,
   }
   assert(track->type == DELOOP_TRACK_TYPE_STEREO);
 
+  float ramp = 0.0;
   if (lout != NULL) {
     assert(track->lrb != NULL && track->lrb->buf != NULL);
-    deloop_track_ringbuf_read(track->lrb, lout, cnt);
+    ramp += deloop_track_ringbuf_read(track->lrb, lout, cnt);
   }
 
   if (rout != NULL) {
     assert(track->rrb != NULL && track->rrb->buf != NULL);
-    deloop_track_ringbuf_read(track->rrb, rout, cnt);
+    ramp += deloop_track_ringbuf_read(track->rrb, rout, cnt);
   }
+
+  track->ramp = ramp / 2.0;
 }
