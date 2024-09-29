@@ -121,21 +121,18 @@ int deloop_client_init() {
   /* open a client connection to the JACK server */
   state_.client = jack_client_open(client_name, options, &status, server_name);
   if (state_.client == NULL) {
-    fprintf(stderr,
-            "jack_client_open() failed, "
-            "status = 0x%2.0x\n",
-            status);
+    DELOOP_LOG_ERROR("jack_client_open() failed, status = 0x%2.0x", status);
     if (status & JackServerFailed) {
-      fprintf(stderr, "Unable to connect to JACK server\n");
+      DELOOP_LOG_ERROR("Unable to connect to JACK server");
     }
     return 1;
   }
   if (status & JackServerStarted) {
-    fprintf(stderr, "JACK server started\n");
+    DELOOP_LOG_INFO("JACK server started");
   }
   if (status & JackNameNotUnique) {
     client_name = jack_get_client_name(state_.client);
-    fprintf(stderr, "unique name `%s' assigned\n", client_name);
+    DELOOP_LOG_WARN("Unique name `%s' assigned", client_name);
   }
 
   /* tell the JACK server to call `process()' whenever
@@ -156,35 +153,35 @@ int deloop_client_init() {
   state_.output_FL = jack_port_register(
       state_.client, "output_FL", JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
   if (state_.output_FL == NULL) {
-    fprintf(stderr, "no more JACK ports available\n");
+    DELOOP_LOG_ERROR("No more JACK ports available");
     return 1;
   }
 
   state_.output_FR = jack_port_register(
       state_.client, "output_FR", JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
   if (state_.output_FR == NULL) {
-    fprintf(stderr, "no more JACK ports available\n");
+    DELOOP_LOG_ERROR("No more JACK ports available");
     return 1;
   }
 
   state_.input_FL = jack_port_register(
       state_.client, "input_FL", JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput, 0);
   if (state_.input_FL == NULL) {
-    fprintf(stderr, "no more JACK ports available\n");
+    DELOOP_LOG_ERROR("No more JACK ports available");
     return 1;
   }
 
   state_.input_FR = jack_port_register(
       state_.client, "input_FR", JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput, 0);
   if (state_.input_FR == NULL) {
-    fprintf(stderr, "no more JACK ports available\n");
+    DELOOP_LOG_ERROR("No more JACK ports available");
     return 1;
   }
 
   state_.control_port = jack_port_register(
       state_.client, "control", JACK_DEFAULT_MIDI_TYPE, JackPortIsInput, 0);
   if (state_.control_port == NULL) {
-    fprintf(stderr, "no more JACK ports available\n");
+    DELOOP_LOG_ERROR("No more JACK ports available");
     return 1;
   }
 
@@ -192,7 +189,7 @@ int deloop_client_init() {
    * process() callback will start running now. */
 
   if (jack_activate(state_.client)) {
-    fprintf(stderr, "cannot activate client");
+    DELOOP_LOG_ERROR("Failed to activate client");
     return 1;
   }
 
@@ -317,10 +314,10 @@ void deloop_client_device_list_free(deloop_device_t *devices) {
 
 deloop_track_t *deloop_client_get_track(deloop_client_track_id_t track_num) {
   if (track_num >= state_.num_tracks) {
-    deloop_log_error("Invalid track number: %u", track_num);
+    DELOOP_LOG_ERROR("Invalid track number: %u", track_num);
     return NULL;
   } else if (state_.track_list[track_num] == NULL) {
-    deloop_log_error("Track %u is NULL", track_num);
+    DELOOP_LOG_ERROR("Track %u is NULL", track_num);
     return NULL;
   }
 
@@ -333,7 +330,7 @@ deloop_client_track_id_t deloop_client_get_num_tracks() {
 
 deloop_client_track_id_t deloop_client_add_track() {
   if (state_.num_tracks >= MAX_NUM_TRACKS) {
-    deloop_log_error("Max number of tracks reached: %u", MAX_NUM_TRACKS);
+    DELOOP_LOG_ERROR("Max number of tracks reached: %u", MAX_NUM_TRACKS);
     return UINT32_MAX;
   }
 
@@ -346,7 +343,7 @@ deloop_client_track_id_t deloop_client_add_track() {
 
 void deloop_client_set_focused_track(deloop_client_track_id_t track_num) {
   if (track_num >= state_.num_tracks) {
-    deloop_log_error("Invalid track number: %u", track_num);
+    DELOOP_LOG_ERROR("Invalid track number: %u", track_num);
     return;
   }
 
