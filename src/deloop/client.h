@@ -43,5 +43,6 @@ void deloop_client_configure_sink(const char *output_FL, const char *output_FR);
 void deloop_client_configure_control(const char *control);
 
 deloop_device_t *deloop_client_find_midi_devices();
-deloop_device_t *deloop_client_find_audio_devices(bool is_input, bool is_output);
+deloop_device_t *deloop_client_find_audio_devices(bool is_input,
+                                                  bool is_output);
 void deloop_client_device_list_free(deloop_device_t *devices);

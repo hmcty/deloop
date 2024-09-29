@@ -1,14 +1,14 @@
 #include <assert.h>
-#include <stdio.h>
 #include <errno.h>
-#include <stdlib.h>
-#include <string.h>
-#include <math.h>
-#include <signal.h>
-#include <unistd.h>
-#include <stdbool.h>
 #include <jack/jack.h>
 #include <jack/midiport.h>
+#include <math.h>
+#include <signal.h>
+#include <stdbool.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
 
 #include "deloop/logging.h"
 #include "deloop/track.h"
@@ -42,10 +42,9 @@ int process(jack_nframes_t nframes, void *arg) {
   jack_nframes_t ctrl_event_count;
   deloop_track_t *track;
 
-  if (!state_.initialized
-    || state_.num_tracks == 0
-    || state_.focus_track >= state_.num_tracks
-    || (track = state_.track_list[state_.focus_track]) == NULL) {
+  if (!state_.initialized || state_.num_tracks == 0 ||
+      state_.focus_track >= state_.num_tracks ||
+      (track = state_.track_list[state_.focus_track]) == NULL) {
     return 0;
   }
   track = state_.track_list[state_.focus_track];
@@ -55,168 +54,177 @@ int process(jack_nframes_t nframes, void *arg) {
   for (int i = 0; i < ctrl_event_count; i++) {
     jack_midi_event_get(&ctrl_event, ctrl_buffer, i);
     ctrl_event_data = ctrl_event.buffer;
-    if (ctrl_event.size != 3) continue;
-    if ((ctrl_event_data[0] & 0xB0) != 0xB0) continue;
-    if (ctrl_event_data[1] != 0x40) continue;
+    if (ctrl_event.size != 3)
+      continue;
+    if ((ctrl_event_data[0] & 0xB0) != 0xB0)
+      continue;
+    if (ctrl_event_data[1] != 0x40)
+      continue;
     if (ctrl_event_data[2] == 0x7F) {
       // Act on press: https://x.com/ID_AA_Carmack/status/1787850053912064005
       switch (track->state) {
-        case deloop_TRACK_STATE_STOPPED:
-          deloop_track_start_recording(track);
-          break;
-        case deloop_TRACK_STATE_PLAYING:
-          deloop_track_stop_playing(track);
-          break;
-        case deloop_TRACK_STATE_RECORDING:
-          deloop_track_stop_recording(track);
-          break;
-        case deloop_TRACK_STATE_OVERDUBBING:
-          deloop_track_start_playing(track);
-          break;
-        default:
-          break;
+      case deloop_TRACK_STATE_STOPPED:
+        deloop_track_start_recording(track);
+        break;
+      case deloop_TRACK_STATE_PLAYING:
+        deloop_track_stop_playing(track);
+        break;
+      case deloop_TRACK_STATE_RECORDING:
+        deloop_track_stop_recording(track);
+        break;
+      case deloop_TRACK_STATE_OVERDUBBING:
+        deloop_track_start_playing(track);
+        break;
+      default:
+        break;
       }
     }
   }
 
   deloop_track_stereo_tick(
-    track,
-    (float *) jack_port_get_buffer(state_.input_FL, nframes),
-    (float *) jack_port_get_buffer(state_.input_FR, nframes),
-    nframes);
+      track, (float *)jack_port_get_buffer(state_.input_FL, nframes),
+      (float *)jack_port_get_buffer(state_.input_FR, nframes), nframes);
 
-  memset(jack_port_get_buffer(state_.output_FL, nframes), 0, nframes * sizeof(float));
-  memset(jack_port_get_buffer(state_.output_FR, nframes), 0, nframes * sizeof(float));
+  memset(jack_port_get_buffer(state_.output_FL, nframes), 0,
+         nframes * sizeof(float));
+  memset(jack_port_get_buffer(state_.output_FR, nframes), 0,
+         nframes * sizeof(float));
 
   // If playback not active, exit early
   for (uint32_t i = 0; i < state_.num_tracks; i++) {
-    if (state_.track_list[i] == NULL) continue;
-    if (state_.track_list[i]->state == deloop_TRACK_STATE_STOPPED) continue;
+    if (state_.track_list[i] == NULL)
+      continue;
+    if (state_.track_list[i]->state == deloop_TRACK_STATE_STOPPED)
+      continue;
 
     deloop_track_stereo_read(
-      state_.track_list[i],
-      (float *) jack_port_get_buffer(state_.output_FL, nframes),
-      (float *) jack_port_get_buffer(state_.output_FR, nframes),
-      nframes);
+        state_.track_list[i],
+        (float *)jack_port_get_buffer(state_.output_FL, nframes),
+        (float *)jack_port_get_buffer(state_.output_FR, nframes), nframes);
   }
-	return 0;
+  return 0;
 }
 
 int deloop_client_init() {
   const char *client_name = "deloop";
-	const char **ports;
-	const char *server_name = NULL;
-	jack_options_t options = JackNullOption;
-	jack_status_t status;
-	int i;
+  const char **ports;
+  const char *server_name = NULL;
+  jack_options_t options = JackNullOption;
+  jack_status_t status;
+  int i;
 
   if (state_.initialized) {
     return 0;
   }
   memset(&state_, 0, sizeof(state_));
 
-	/* open a client connection to the JACK server */
-	state_.client = jack_client_open(client_name, options, &status, server_name);
-	if (state_.client == NULL) {
-		fprintf (stderr, "jack_client_open() failed, "
-			 "status = 0x%2.0x\n", status);
-		if (status & JackServerFailed) {
-			fprintf (stderr, "Unable to connect to JACK server\n");
-		}
+  /* open a client connection to the JACK server */
+  state_.client = jack_client_open(client_name, options, &status, server_name);
+  if (state_.client == NULL) {
+    fprintf(stderr,
+            "jack_client_open() failed, "
+            "status = 0x%2.0x\n",
+            status);
+    if (status & JackServerFailed) {
+      fprintf(stderr, "Unable to connect to JACK server\n");
+    }
     return 1;
-	}
-	if (status & JackServerStarted) {
-		fprintf (stderr, "JACK server started\n");
-	}
-	if (status & JackNameNotUnique) {
-		client_name = jack_get_client_name(state_.client);
-		fprintf (stderr, "unique name `%s' assigned\n", client_name);
-	}
+  }
+  if (status & JackServerStarted) {
+    fprintf(stderr, "JACK server started\n");
+  }
+  if (status & JackNameNotUnique) {
+    client_name = jack_get_client_name(state_.client);
+    fprintf(stderr, "unique name `%s' assigned\n", client_name);
+  }
 
-	/* tell the JACK server to call `process()' whenever
-	   there is work to be done.
-	*/
+  /* tell the JACK server to call `process()' whenever
+     there is work to be done.
+  */
 
-	jack_set_process_callback(state_.client, process, NULL);
+  jack_set_process_callback(state_.client, process, NULL);
 
-	/* tell the JACK server to call `jack_shutdown()' if
-	   it ever shuts down, either entirely, or if it
-	   just decides to stop calling us.
-	*/
+  /* tell the JACK server to call `jack_shutdown()' if
+     it ever shuts down, either entirely, or if it
+     just decides to stop calling us.
+  */
 
-	jack_on_shutdown(state_.client, deloop_client_cleanup, 0);
+  jack_on_shutdown(state_.client, deloop_client_cleanup, 0);
 
-	/* create ports */
+  /* create ports */
 
   state_.output_FL = jack_port_register(
-    state_.client, "output_FL", JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
+      state_.client, "output_FL", JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
   if (state_.output_FL == NULL) {
     fprintf(stderr, "no more JACK ports available\n");
     return 1;
   }
 
   state_.output_FR = jack_port_register(
-    state_.client, "output_FR", JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
+      state_.client, "output_FR", JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
   if (state_.output_FR == NULL) {
     fprintf(stderr, "no more JACK ports available\n");
     return 1;
   }
 
   state_.input_FL = jack_port_register(
-    state_.client, "input_FL", JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput, 0);
+      state_.client, "input_FL", JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput, 0);
   if (state_.input_FL == NULL) {
     fprintf(stderr, "no more JACK ports available\n");
     return 1;
   }
 
   state_.input_FR = jack_port_register(
-    state_.client, "input_FR", JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput, 0);
+      state_.client, "input_FR", JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput, 0);
   if (state_.input_FR == NULL) {
     fprintf(stderr, "no more JACK ports available\n");
     return 1;
   }
 
   state_.control_port = jack_port_register(
-    state_.client, "control", JACK_DEFAULT_MIDI_TYPE, JackPortIsInput, 0);
+      state_.client, "control", JACK_DEFAULT_MIDI_TYPE, JackPortIsInput, 0);
   if (state_.control_port == NULL) {
     fprintf(stderr, "no more JACK ports available\n");
     return 1;
   }
 
-	/* Tell the JACK server that we are ready to roll.  Our
-	 * process() callback will start running now. */
+  /* Tell the JACK server that we are ready to roll.  Our
+   * process() callback will start running now. */
 
-	if (jack_activate(state_.client)) {
-		fprintf (stderr, "cannot activate client");
+  if (jack_activate(state_.client)) {
+    fprintf(stderr, "cannot activate client");
     return 1;
-	}
+  }
 
-	/* Connect the ports.  You can't do this before the client is
-	 * activated, because we can't make connections to clients
-	 * that aren't running.  Note the confusing (but necessary)
-	 * orientation of the driver backend ports: playback ports are
-	 * "input" to the backend, and capture ports are "output" from
-	 * it.
-	 */
+  /* Connect the ports.  You can't do this before the client is
+   * activated, because we can't make connections to clients
+   * that aren't running.  Note the confusing (but necessary)
+   * orientation of the driver backend ports: playback ports are
+   * "input" to the backend, and capture ports are "output" from
+   * it.
+   */
 
-//state_.track1 = deloop_track_create(
-//  deloop_TRACK_TYPE_STEREO,
-//  jack_get_sample_rate(state_.client));
+  // state_.track1 = deloop_track_create(
+  //   deloop_TRACK_TYPE_STEREO,
+  //   jack_get_sample_rate(state_.client));
 
   state_.initialized = true;
   return 0;
 }
 
-deloop_device_t *deloop_client_find_audio_devices(bool is_input, bool is_output) {
+deloop_device_t *deloop_client_find_audio_devices(bool is_input,
+                                                  bool is_output) {
   deloop_device_t *devices = NULL;
   char **port_names = NULL;
   unsigned long port_flags = 0;
   int num_ports = 0;
 
-  if (is_input) port_flags |= JackPortIsInput;
-  if (is_output) port_flags |= JackPortIsOutput;
-  port_names = jack_get_ports(
-    state_.client, NULL, JACK_DEFAULT_AUDIO_TYPE, port_flags);
+  if (is_input)
+    port_flags |= JackPortIsInput;
+  if (is_output)
+    port_flags |= JackPortIsOutput;
+  port_names =
+      jack_get_ports(state_.client, NULL, JACK_DEFAULT_AUDIO_TYPE, port_flags);
   if (port_names == NULL) {
     return NULL;
   }
@@ -260,7 +268,8 @@ deloop_device_t *deloop_client_find_audio_devices(bool is_input, bool is_output)
     device->type = device_type;
     device->port_type = port_type;
     device->port_name = strdup(port_names[num_ports]);
-    device->client_name = strndup(port_names[num_ports], ch - port_names[num_ports]);
+    device->client_name =
+        strndup(port_names[num_ports], ch - port_names[num_ports]);
     device->last = devices;
     devices = device;
     num_ports += 1;
@@ -276,8 +285,8 @@ deloop_device_t *deloop_client_find_midi_devices() {
   unsigned long port_flags = 0;
   int num_ports = 0;
 
-  port_names = jack_get_ports(
-    state_.client, NULL, JACK_DEFAULT_MIDI_TYPE, JackPortIsOutput);
+  port_names = jack_get_ports(state_.client, NULL, JACK_DEFAULT_MIDI_TYPE,
+                              JackPortIsOutput);
   if (port_names == NULL) {
     return NULL;
   }
@@ -329,8 +338,7 @@ deloop_client_track_id_t deloop_client_add_track() {
   }
 
   deloop_track_t *track = deloop_track_create(
-    deloop_TRACK_TYPE_STEREO,
-    jack_get_sample_rate(state_.client));
+      deloop_TRACK_TYPE_STEREO, jack_get_sample_rate(state_.client));
   state_.track_list[state_.num_tracks] = track;
   state_.num_tracks += 1;
   return state_.num_tracks - 1;
@@ -378,7 +386,8 @@ void deloop_client_configure_control(const char *control) {
 void deloop_client_cleanup() {
   jack_client_close(state_.client);
   for (uint32_t i = 0; i < state_.num_tracks; i++) {
-    if (state_.track_list[i] == NULL) continue;
+    if (state_.track_list[i] == NULL)
+      continue;
     deloop_track_free(state_.track_list[i]);
   }
   state_.initialized = false;

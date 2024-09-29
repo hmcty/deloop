@@ -1,8 +1,7 @@
 // build.rs
 
 use std::env;
-use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::path::PathBuf;
 
 fn main() {
     pkg_config::Config::new().probe("jack").unwrap();
