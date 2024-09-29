@@ -10,10 +10,10 @@
 #include <jack/jack.h>
 #include <jack/midiport.h>
 
-#include "bizzy/logging.h"
-#include "bizzy/track.h"
+#include "deloop/logging.h"
+#include "deloop/track.h"
 
-#include "bizzy/client.h"
+#include "deloop/client.h"
 
 #define DEFAULT_NUM_CHANNELS 2
 #define MAX_NUM_PORTS 32
@@ -32,7 +32,7 @@ static struct app_state_t {
 
   uint32_t num_tracks;
   uint32_t focus_track;
-  bizzy_track_t *track_list[MAX_NUM_TRACKS];
+  deloop_track_t *track_list[MAX_NUM_TRACKS];
 } state_;
 
 int process(jack_nframes_t nframes, void *arg) {
@@ -40,7 +40,7 @@ int process(jack_nframes_t nframes, void *arg) {
   jack_midi_event_t ctrl_event;
   uint8_t *ctrl_event_data;
   jack_nframes_t ctrl_event_count;
-  bizzy_track_t *track;
+  deloop_track_t *track;
 
   if (!state_.initialized
     || state_.num_tracks == 0
@@ -51,7 +51,7 @@ int process(jack_nframes_t nframes, void *arg) {
   track = state_.track_list[state_.focus_track];
 
   ctrl_buffer = jack_port_get_buffer(state_.control_port, nframes);
-  ctrl_event_count = jack_midi_get_event_count(ctrl_buffer); 
+  ctrl_event_count = jack_midi_get_event_count(ctrl_buffer);
   for (int i = 0; i < ctrl_event_count; i++) {
     jack_midi_event_get(&ctrl_event, ctrl_buffer, i);
     ctrl_event_data = ctrl_event.buffer;
@@ -59,33 +59,31 @@ int process(jack_nframes_t nframes, void *arg) {
     if ((ctrl_event_data[0] & 0xB0) != 0xB0) continue;
     if (ctrl_event_data[1] != 0x40) continue;
     if (ctrl_event_data[2] == 0x7F) {
+      // Act on press: https://x.com/ID_AA_Carmack/status/1787850053912064005
       switch (track->state) {
-        case BIZZY_TRACK_STATE_STOPPED:
-          bizzy_track_start_recording(track);
+        case deloop_TRACK_STATE_STOPPED:
+          deloop_track_start_recording(track);
           break;
-        case BIZZY_TRACK_STATE_PLAYING:
-          bizzy_track_stop_playing(track);
+        case deloop_TRACK_STATE_PLAYING:
+          deloop_track_stop_playing(track);
           break;
-        case BIZZY_TRACK_STATE_RECORDING:
-          bizzy_track_stop_recording(track);
+        case deloop_TRACK_STATE_RECORDING:
+          deloop_track_stop_recording(track);
           break;
-        case BIZZY_TRACK_STATE_OVERDUBBING:
-          bizzy_track_start_playing(track);
+        case deloop_TRACK_STATE_OVERDUBBING:
+          deloop_track_start_playing(track);
           break;
         default:
           break;
       }
-    } else {
-      // bizzy_track_stop_recording(track);
     }
   }
 
-
-  bizzy_track_stereo_tick(
+  deloop_track_stereo_tick(
     track,
     (float *) jack_port_get_buffer(state_.input_FL, nframes),
     (float *) jack_port_get_buffer(state_.input_FR, nframes),
-    nframes);  
+    nframes);
 
   memset(jack_port_get_buffer(state_.output_FL, nframes), 0, nframes * sizeof(float));
   memset(jack_port_get_buffer(state_.output_FR, nframes), 0, nframes * sizeof(float));
@@ -93,19 +91,19 @@ int process(jack_nframes_t nframes, void *arg) {
   // If playback not active, exit early
   for (uint32_t i = 0; i < state_.num_tracks; i++) {
     if (state_.track_list[i] == NULL) continue;
-    if (state_.track_list[i]->state == BIZZY_TRACK_STATE_STOPPED) continue;
+    if (state_.track_list[i]->state == deloop_TRACK_STATE_STOPPED) continue;
 
-    bizzy_track_stereo_read(
+    deloop_track_stereo_read(
       state_.track_list[i],
       (float *) jack_port_get_buffer(state_.output_FL, nframes),
       (float *) jack_port_get_buffer(state_.output_FR, nframes),
       nframes);
   }
-	return 0;      
+	return 0;
 }
 
-int bizzy_client_init() {
-  const char *client_name = "bizzy";
+int deloop_client_init() {
+  const char *client_name = "deloop";
 	const char **ports;
 	const char *server_name = NULL;
 	jack_options_t options = JackNullOption;
@@ -146,7 +144,7 @@ int bizzy_client_init() {
 	   just decides to stop calling us.
 	*/
 
-	jack_on_shutdown(state_.client, bizzy_client_cleanup, 0);
+	jack_on_shutdown(state_.client, deloop_client_cleanup, 0);
 
 	/* create ports */
 
@@ -201,16 +199,16 @@ int bizzy_client_init() {
 	 * it.
 	 */
 
-//state_.track1 = bizzy_track_create(
-//  BIZZY_TRACK_TYPE_STEREO,
+//state_.track1 = deloop_track_create(
+//  deloop_TRACK_TYPE_STEREO,
 //  jack_get_sample_rate(state_.client));
 
   state_.initialized = true;
   return 0;
 }
 
-bizzy_device_t *bizzy_client_find_audio_devices(bool is_input, bool is_output) {
-  bizzy_device_t *devices = NULL;
+deloop_device_t *deloop_client_find_audio_devices(bool is_input, bool is_output) {
+  deloop_device_t *devices = NULL;
   char **port_names = NULL;
   unsigned long port_flags = 0;
   int num_ports = 0;
@@ -230,20 +228,23 @@ bizzy_device_t *bizzy_client_find_audio_devices(bool is_input, bool is_output) {
       continue;
     }
 
-    bizzy_device_type_t device_type;
-    bizzy_device_port_type_t port_type;
+    deloop_device_type_t device_type;
+    deloop_device_port_type_t port_type;
     if (strcmp(ch + 1, "output_FL") == 0) {
-      device_type = BIZZY_DEVICE_TYPE_AUDIO_OUTPUT;
-      port_type = BIZZY_DEVICE_PORT_TYPE_STEREO_FL;
+      device_type = deloop_DEVICE_TYPE_AUDIO_OUTPUT;
+      port_type = deloop_DEVICE_PORT_TYPE_STEREO_FL;
     } else if (strcmp(ch + 1, "output_FR") == 0) {
-      device_type = BIZZY_DEVICE_TYPE_AUDIO_OUTPUT;
-      port_type = BIZZY_DEVICE_PORT_TYPE_STEREO_FR;
+      device_type = deloop_DEVICE_TYPE_AUDIO_OUTPUT;
+      port_type = deloop_DEVICE_PORT_TYPE_STEREO_FR;
     } else if (strcmp(ch + 1, "playback_FL") == 0) {
-      device_type = BIZZY_DEVICE_TYPE_AUDIO_INPUT;
-      port_type = BIZZY_DEVICE_PORT_TYPE_STEREO_FL;
+      device_type = deloop_DEVICE_TYPE_AUDIO_INPUT;
+      port_type = deloop_DEVICE_PORT_TYPE_STEREO_FL;
     } else if (strcmp(ch + 1, "playback_FR") == 0) {
-      device_type = BIZZY_DEVICE_TYPE_AUDIO_INPUT;
-      port_type = BIZZY_DEVICE_PORT_TYPE_STEREO_FR;
+      device_type = deloop_DEVICE_TYPE_AUDIO_INPUT;
+      port_type = deloop_DEVICE_PORT_TYPE_STEREO_FR;
+    } else if (strcmp(ch + 1, "capture_MONO") == 0) {
+      device_type = deloop_DEVICE_TYPE_AUDIO_INPUT;
+      port_type = deloop_DEVICE_PORT_TYPE_MONO;
     } else {
       num_ports += 1;
       continue;
@@ -255,7 +256,7 @@ bizzy_device_t *bizzy_client_find_audio_devices(bool is_input, bool is_output) {
       continue;
     }
 
-    bizzy_device_t *device = malloc(sizeof(bizzy_device_t)); 
+    deloop_device_t *device = malloc(sizeof(deloop_device_t));
     device->type = device_type;
     device->port_type = port_type;
     device->port_name = strdup(port_names[num_ports]);
@@ -269,8 +270,8 @@ bizzy_device_t *bizzy_client_find_audio_devices(bool is_input, bool is_output) {
   return devices;
 }
 
-bizzy_device_t *bizzy_client_find_midi_devices() {
-  bizzy_device_t *devices = NULL;
+deloop_device_t *deloop_client_find_midi_devices() {
+  deloop_device_t *devices = NULL;
   char **port_names = NULL;
   unsigned long port_flags = 0;
   int num_ports = 0;
@@ -281,9 +282,9 @@ bizzy_device_t *bizzy_client_find_midi_devices() {
     return NULL;
   }
   while (port_names[num_ports] != NULL) {
-    bizzy_device_t *device = malloc(sizeof(bizzy_device_t)); 
-    device->type = BIZZY_DEVICE_TYPE_MIDI_OUTPUT;
-    device->port_type = BIZZY_DEVICE_PORT_TYPE_MONO;
+    deloop_device_t *device = malloc(sizeof(deloop_device_t));
+    device->type = deloop_DEVICE_TYPE_MIDI_OUTPUT;
+    device->port_type = deloop_DEVICE_PORT_TYPE_MONO;
     device->port_name = strdup(port_names[num_ports]);
     device->client_name = strdup(port_names[num_ports]);
     device->last = devices;
@@ -295,9 +296,9 @@ bizzy_device_t *bizzy_client_find_midi_devices() {
   return devices;
 }
 
-void bizzy_client_device_list_free(bizzy_device_t *devices) {
+void deloop_client_device_list_free(deloop_device_t *devices) {
   while (devices != NULL) {
-    bizzy_device_t *next = devices->last;
+    deloop_device_t *next = devices->last;
     free(devices->client_name);
     free(devices->port_name);
     free(devices);
@@ -305,58 +306,62 @@ void bizzy_client_device_list_free(bizzy_device_t *devices) {
   }
 }
 
-bizzy_track_t *bizzy_client_get_track(bizzy_client_track_id_t track_num) {
+deloop_track_t *deloop_client_get_track(deloop_client_track_id_t track_num) {
   if (track_num >= state_.num_tracks) {
-    bizzy_log_error("Invalid track number: %u", track_num);
+    deloop_log_error("Invalid track number: %u", track_num);
     return NULL;
   } else if (state_.track_list[track_num] == NULL) {
-    bizzy_log_error("Track %u is NULL", track_num);
+    deloop_log_error("Track %u is NULL", track_num);
     return NULL;
   }
 
   return state_.track_list[track_num];
 }
 
-bizzy_client_track_id_t bizzy_client_get_num_tracks() {
+deloop_client_track_id_t deloop_client_get_num_tracks() {
   return state_.num_tracks;
 }
 
-bizzy_client_track_id_t bizzy_client_add_track() {
+deloop_client_track_id_t deloop_client_add_track() {
   if (state_.num_tracks >= MAX_NUM_TRACKS) {
-    bizzy_log_error("Max number of tracks reached: %u", MAX_NUM_TRACKS);
+    deloop_log_error("Max number of tracks reached: %u", MAX_NUM_TRACKS);
     return UINT32_MAX;
   }
 
-  bizzy_track_t *track = bizzy_track_create(
-    BIZZY_TRACK_TYPE_STEREO,
+  deloop_track_t *track = deloop_track_create(
+    deloop_TRACK_TYPE_STEREO,
     jack_get_sample_rate(state_.client));
   state_.track_list[state_.num_tracks] = track;
   state_.num_tracks += 1;
   return state_.num_tracks - 1;
 }
 
-void bizzy_client_set_focused_track(bizzy_client_track_id_t track_num) {
+void deloop_client_set_focused_track(deloop_client_track_id_t track_num) {
   if (track_num >= state_.num_tracks) {
-    bizzy_log_error("Invalid track number: %u", track_num);
+    deloop_log_error("Invalid track number: %u", track_num);
     return;
   }
 
   state_.focus_track = track_num;
 }
 
-bizzy_client_track_id_t bizzy_client_get_focused_track() {
+deloop_client_track_id_t deloop_client_get_focused_track() {
   return state_.focus_track;
 }
 
-void bizzy_client_configure_source(const char *source_FL, const char *source_FR) {
+void deloop_client_add_source(const char *source_FL, const char *source_FR) {
   // @todo(hmcty): Check return values
-  jack_port_disconnect(state_.client, state_.input_FL);
-  jack_port_disconnect(state_.client, state_.input_FR);
   jack_connect(state_.client, source_FL, jack_port_name(state_.input_FL));
   jack_connect(state_.client, source_FR, jack_port_name(state_.input_FR));
 }
 
-void bizzy_client_configure_sink(const char *sink_FL, const char *sink_FR) {
+void deloop_client_remove_source(const char *source_FL, const char *source_FR) {
+  // @todo(hmcty): Check return values
+  jack_port_disconnect(state_.client, state_.input_FL);
+  jack_port_disconnect(state_.client, state_.input_FR);
+}
+
+void deloop_client_configure_sink(const char *sink_FL, const char *sink_FR) {
   // @todo(hmcty): Check return values
   jack_port_disconnect(state_.client, state_.output_FL);
   jack_port_disconnect(state_.client, state_.output_FR);
@@ -364,18 +369,17 @@ void bizzy_client_configure_sink(const char *sink_FL, const char *sink_FR) {
   jack_connect(state_.client, jack_port_name(state_.output_FR), sink_FR);
 }
 
-void bizzy_client_configure_control(const char *control) {
+void deloop_client_configure_control(const char *control) {
   // @todo(hmcty): Check return values
   jack_port_disconnect(state_.client, state_.control_port);
   jack_connect(state_.client, control, jack_port_name(state_.control_port));
 }
 
-void bizzy_client_cleanup() {
+void deloop_client_cleanup() {
   jack_client_close(state_.client);
   for (uint32_t i = 0; i < state_.num_tracks; i++) {
     if (state_.track_list[i] == NULL) continue;
-    bizzy_track_free(state_.track_list[i]);
+    deloop_track_free(state_.track_list[i]);
   }
   state_.initialized = false;
 }
-
