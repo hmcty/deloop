@@ -12,10 +12,10 @@ typedef enum {
 } deloop_device_type_t;
 
 typedef enum {
-  deloop_DEVICE_PORT_TYPE_INVALID,
-  deloop_DEVICE_PORT_TYPE_MONO,
-  deloop_DEVICE_PORT_TYPE_STEREO_FL,
-  deloop_DEVICE_PORT_TYPE_STEREO_FR,
+  DELOOP_DEVICE_PORT_TYPE_INVALID,
+  DELOOP_DEVICE_PORT_TYPE_MONO,
+  DELOOP_DEVICE_PORT_TYPE_STEREO_FL,
+  DELOOP_DEVICE_PORT_TYPE_STEREO_FR,
 } deloop_device_port_type_t;
 
 typedef struct deloop_device {

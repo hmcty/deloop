@@ -12,6 +12,7 @@
 
 #include "deloop/logging.h"
 #include "deloop/track.h"
+#include "track.h"
 
 #include "deloop/client.h"
 
@@ -62,22 +63,7 @@ int process(jack_nframes_t nframes, void *arg) {
       continue;
     if (ctrl_event_data[2] == 0x7F) {
       // Act on press: https://x.com/ID_AA_Carmack/status/1787850053912064005
-      switch (track->state) {
-      case deloop_TRACK_STATE_STOPPED:
-        deloop_track_start_recording(track);
-        break;
-      case deloop_TRACK_STATE_PLAYING:
-        deloop_track_stop_playing(track);
-        break;
-      case deloop_TRACK_STATE_RECORDING:
-        deloop_track_stop_recording(track);
-        break;
-      case deloop_TRACK_STATE_OVERDUBBING:
-        deloop_track_start_playing(track);
-        break;
-      default:
-        break;
-      }
+      deloop_track_handle_action(track);
     }
   }
 
@@ -93,8 +79,6 @@ int process(jack_nframes_t nframes, void *arg) {
   // If playback not active, exit early
   for (uint32_t i = 0; i < state_.num_tracks; i++) {
     if (state_.track_list[i] == NULL)
-      continue;
-    if (state_.track_list[i]->state == deloop_TRACK_STATE_STOPPED)
       continue;
 
     deloop_track_stereo_read(
@@ -202,7 +186,7 @@ int deloop_client_init() {
    */
 
   // state_.track1 = deloop_track_create(
-  //   deloop_TRACK_TYPE_STEREO,
+  //   DELOOP_TRACK_TYPE_STEREO,
   //   jack_get_sample_rate(state_.client));
 
   state_.initialized = true;
@@ -237,19 +221,19 @@ deloop_device_t *deloop_client_find_audio_devices(bool is_input,
     deloop_device_port_type_t port_type;
     if (strcmp(ch + 1, "output_FL") == 0) {
       device_type = deloop_DEVICE_TYPE_AUDIO_OUTPUT;
-      port_type = deloop_DEVICE_PORT_TYPE_STEREO_FL;
+      port_type = DELOOP_DEVICE_PORT_TYPE_STEREO_FL;
     } else if (strcmp(ch + 1, "output_FR") == 0) {
       device_type = deloop_DEVICE_TYPE_AUDIO_OUTPUT;
-      port_type = deloop_DEVICE_PORT_TYPE_STEREO_FR;
+      port_type = DELOOP_DEVICE_PORT_TYPE_STEREO_FR;
     } else if (strcmp(ch + 1, "playback_FL") == 0) {
       device_type = deloop_DEVICE_TYPE_AUDIO_INPUT;
-      port_type = deloop_DEVICE_PORT_TYPE_STEREO_FL;
+      port_type = DELOOP_DEVICE_PORT_TYPE_STEREO_FL;
     } else if (strcmp(ch + 1, "playback_FR") == 0) {
       device_type = deloop_DEVICE_TYPE_AUDIO_INPUT;
-      port_type = deloop_DEVICE_PORT_TYPE_STEREO_FR;
+      port_type = DELOOP_DEVICE_PORT_TYPE_STEREO_FR;
     } else if (strcmp(ch + 1, "capture_MONO") == 0) {
       device_type = deloop_DEVICE_TYPE_AUDIO_INPUT;
-      port_type = deloop_DEVICE_PORT_TYPE_MONO;
+      port_type = DELOOP_DEVICE_PORT_TYPE_MONO;
     } else {
       num_ports += 1;
       continue;
@@ -290,7 +274,7 @@ deloop_device_t *deloop_client_find_midi_devices() {
   while (port_names[num_ports] != NULL) {
     deloop_device_t *device = malloc(sizeof(deloop_device_t));
     device->type = deloop_DEVICE_TYPE_MIDI_OUTPUT;
-    device->port_type = deloop_DEVICE_PORT_TYPE_MONO;
+    device->port_type = DELOOP_DEVICE_PORT_TYPE_MONO;
     device->port_name = strdup(port_names[num_ports]);
     device->client_name = strdup(port_names[num_ports]);
     device->last = devices;
@@ -335,7 +319,7 @@ deloop_client_track_id_t deloop_client_add_track() {
   }
 
   deloop_track_t *track = deloop_track_create(
-      deloop_TRACK_TYPE_STEREO, jack_get_sample_rate(state_.client));
+      DELOOP_TRACK_TYPE_STEREO, jack_get_sample_rate(state_.client));
   state_.track_list[state_.num_tracks] = track;
   state_.num_tracks += 1;
   return state_.num_tracks - 1;
