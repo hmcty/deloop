@@ -59,7 +59,7 @@ fn get_track_audio_opts(result: &mut HashMap<String, AudioDevice>, is_input: boo
                 .unwrap()
                 .to_owned();
 
-            if (*ports).port_type == deloop_device_port_type_t_deloop_DEVICE_PORT_TYPE_STEREO_FL {
+            if (*ports).port_type == deloop_device_port_type_t_DELOOP_DEVICE_PORT_TYPE_STEREO_FL {
                 result
                     .entry(client_name.clone())
                     .or_insert(AudioDevice {
@@ -69,7 +69,7 @@ fn get_track_audio_opts(result: &mut HashMap<String, AudioDevice>, is_input: boo
                     })
                     .FL_port_name = Some(port_name.clone());
             } else if (*ports).port_type
-                == deloop_device_port_type_t_deloop_DEVICE_PORT_TYPE_STEREO_FR
+                == deloop_device_port_type_t_DELOOP_DEVICE_PORT_TYPE_STEREO_FR
             {
                 result
                     .entry(client_name.clone())
@@ -79,7 +79,7 @@ fn get_track_audio_opts(result: &mut HashMap<String, AudioDevice>, is_input: boo
                         is_selected: false,
                     })
                     .FR_port_name = Some(port_name.clone());
-            } else if (*ports).port_type == deloop_device_port_type_t_deloop_DEVICE_PORT_TYPE_MONO {
+            } else if (*ports).port_type == deloop_device_port_type_t_DELOOP_DEVICE_PORT_TYPE_MONO {
                 result.entry(client_name.clone()).or_insert(AudioDevice {
                     FL_port_name: Some(port_name.clone()),
                     FR_port_name: Some(port_name.clone()),

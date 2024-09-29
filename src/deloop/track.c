@@ -2,13 +2,14 @@
 #include <assert.h>
 #include <stdbool.h>
 #include <stddef.h>
-#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
 
 #include "jack/jack.h"
 
 #include "deloop/logging.h"
+#include "track.h"
 
 #include "deloop/track.h"
 
@@ -25,14 +26,6 @@
     __typeof__(b) _b = (b);                                                    \
     _a < _b ? _a : _b;                                                         \
   })
-
-/*
- * reset - memset to zero, reset pointers
- * write - overdub incoming data, update write pointer
- * read - read data, update read pointer
- *
- *
- */
 
 deloop_track_ringbuf_t *deloop_track_ringbuf_create(size_t cnt) {
   deloop_track_ringbuf_t *rb =
@@ -147,19 +140,19 @@ deloop_track_t *deloop_track_create(deloop_track_type_t type,
                                     jack_nframes_t frame_rate) {
   deloop_track_t *track = (deloop_track_t *)malloc(sizeof(deloop_track_t));
   track->type = type;
-  track->state = deloop_TRACK_STATE_STOPPED;
+  track->state = DELOOP_TRACK_STATE_AWAITING;
   track->frame_rate = frame_rate;
-  track->duration_s = deloop_TRACK_DURATION_DEFAULT_S;
+  track->duration_s = DELOOP_TRACK_DURATION_DEFAULT_S;
 
-  size_t buf_size = deloop_TRACK_DURATION_DEFAULT_S * frame_rate;
+  size_t buf_size = DELOOP_TRACK_DURATION_DEFAULT_S * frame_rate;
   DELOOP_LOG_INFO("Creating track with buffer size %lu\n", buf_size);
 
   track->lrb = deloop_track_ringbuf_create(buf_size);
   switch (type) {
-  case deloop_TRACK_TYPE_STEREO:
+  case DELOOP_TRACK_TYPE_STEREO:
     track->rrb = deloop_track_ringbuf_create(buf_size);
     break;
-  case deloop_TRACK_TYPE_MONO:
+  case DELOOP_TRACK_TYPE_MONO:
     track->rrb = NULL;
     break;
   default:
@@ -168,12 +161,14 @@ deloop_track_t *deloop_track_create(deloop_track_type_t type,
     return NULL;
   }
 
+  deloop_track_reset(track);
   return track;
 }
 
 void deloop_track_free(deloop_track_t *track) {
   if (track == NULL)
     return;
+
   if (track->lrb != NULL)
     deloop_track_ringbuf_free(track->lrb);
   if (track->rrb != NULL)
@@ -181,27 +176,44 @@ void deloop_track_free(deloop_track_t *track) {
   free(track);
 }
 
-void deloop_track_set_duration(deloop_track_t *track, uint32_t duration_s) {
+void deloop_track_reset(deloop_track_t *track) {
   if (track == NULL)
     return;
 
-  DELOOP_LOG_INFO("Setting track duration to %d seconds", duration_s);
-  track->duration_s = duration_s;
+  deloop_track_ringbuf_reset(track->lrb);
+  deloop_track_ringbuf_reset(track->rrb);
+  track->state = DELOOP_TRACK_STATE_AWAITING;
+}
 
-  size_t buf_size = duration_s * track->frame_rate;
-  assert(buf_size <= track->lrb->buf_size);
-  track->lrb->size = buf_size;
+void deloop_track_handle_action(deloop_track_t *track) {
+  static time_t last_action_time = 0;
+  if (track == NULL)
+    return;
 
-  switch (track->type) {
-  case deloop_TRACK_TYPE_STEREO:
-    assert(buf_size <= track->rrb->buf_size);
-    track->rrb->size = buf_size;
+  switch (track->state) {
+  case DELOOP_TRACK_STATE_AWAITING:
+    deloop_track_start_recording(track);
     break;
-  case deloop_TRACK_TYPE_MONO:
+  case DELOOP_TRACK_STATE_PLAYING:
+    deloop_track_stop_playing(track);
+    break;
+  case DELOOP_TRACK_STATE_PAUSED:
+    if (difftime(time(NULL), last_action_time) < 1.0f) {
+      deloop_track_reset(track);
+    } else {
+      deloop_track_start_playing(track);
+    }
+    break;
+  case DELOOP_TRACK_STATE_RECORDING:
+    deloop_track_stop_recording(track);
+    break;
+  case DELOOP_TRACK_STATE_OVERDUBBING:
+    deloop_track_start_playing(track);
     break;
   default:
-    assert(false);
+    break;
   }
+  last_action_time = time(NULL);
 }
 
 void deloop_track_start_playing(deloop_track_t *track) {
@@ -209,7 +221,7 @@ void deloop_track_start_playing(deloop_track_t *track) {
     return;
 
   DELOOP_LOG_INFO("Starting playing");
-  track->state = deloop_TRACK_STATE_PLAYING;
+  track->state = DELOOP_TRACK_STATE_PLAYING;
 }
 
 void deloop_track_stop_playing(deloop_track_t *track) {
@@ -217,7 +229,7 @@ void deloop_track_stop_playing(deloop_track_t *track) {
     return;
 
   DELOOP_LOG_INFO("Stopping playing");
-  track->state = deloop_TRACK_STATE_STOPPED;
+  track->state = DELOOP_TRACK_STATE_PAUSED;
   if (track->lrb != NULL)
     track->lrb->read = 0;
   if (track->rrb != NULL)
@@ -228,12 +240,8 @@ void deloop_track_start_recording(deloop_track_t *track) {
   if (track == NULL)
     return;
 
-  deloop_track_stop_playing(track);
-  deloop_track_ringbuf_reset(track->lrb);
-  deloop_track_ringbuf_reset(track->rrb);
-
   DELOOP_LOG_INFO("Starting recording");
-  track->state = deloop_TRACK_STATE_RECORDING;
+  track->state = DELOOP_TRACK_STATE_RECORDING;
 }
 
 void deloop_track_stop_recording(deloop_track_t *track) {
@@ -241,15 +249,15 @@ void deloop_track_stop_recording(deloop_track_t *track) {
     return;
 
   DELOOP_LOG_INFO("Stopping recording");
-  track->state = deloop_TRACK_STATE_OVERDUBBING;
+  track->state = DELOOP_TRACK_STATE_OVERDUBBING;
 }
 
 bool deloop_track_is_recording(deloop_track_t *track) {
   if (track == NULL)
     return false;
 
-  return track->state == deloop_TRACK_STATE_RECORDING ||
-         track->state == deloop_TRACK_STATE_OVERDUBBING;
+  return track->state == DELOOP_TRACK_STATE_RECORDING ||
+         track->state == DELOOP_TRACK_STATE_OVERDUBBING;
 }
 
 float deloop_track_get_progress(deloop_track_t *track) {
@@ -264,16 +272,16 @@ void deloop_track_stereo_tick(deloop_track_t *track, float *lin, float *rin,
                               size_t cnt) {
   if (track == NULL)
     return;
-  assert(track->type == deloop_TRACK_TYPE_STEREO);
-  static deloop_track_state_t last_state = deloop_TRACK_STATE_STOPPED;
+  assert(track->type == DELOOP_TRACK_TYPE_STEREO);
+  static deloop_track_state_t last_state = DELOOP_TRACK_STATE_AWAITING;
 
   if (track->state != last_state) {
     DELOOP_LOG_INFO("Track state changed from %d to %d", last_state,
                     track->state);
   }
 
-  if (track->state != deloop_TRACK_STATE_RECORDING &&
-      last_state == deloop_TRACK_STATE_RECORDING) {
+  if (track->state != DELOOP_TRACK_STATE_RECORDING &&
+      last_state == DELOOP_TRACK_STATE_RECORDING) {
     if (track->lrb != NULL) {
       track->lrb->size = track->lrb->write;
       track->lrb->write = 0;
@@ -289,13 +297,13 @@ void deloop_track_stereo_tick(deloop_track_t *track, float *lin, float *rin,
     if (lin != NULL) {
       assert(track->lrb != NULL && track->lrb->buf != NULL);
       deloop_track_ringbuf_write(
-          track->lrb, lin, cnt, track->state == deloop_TRACK_STATE_OVERDUBBING);
+          track->lrb, lin, cnt, track->state == DELOOP_TRACK_STATE_OVERDUBBING);
     }
 
     if (rin != NULL) {
       assert(track->rrb != NULL && track->rrb->buf != NULL);
       deloop_track_ringbuf_write(
-          track->rrb, rin, cnt, track->state == deloop_TRACK_STATE_OVERDUBBING);
+          track->rrb, rin, cnt, track->state == DELOOP_TRACK_STATE_OVERDUBBING);
     }
   }
 
@@ -304,9 +312,12 @@ void deloop_track_stereo_tick(deloop_track_t *track, float *lin, float *rin,
 
 void deloop_track_stereo_read(deloop_track_t *track, float *lout, float *rout,
                               size_t cnt) {
-  if ((track == NULL) || track->state == deloop_TRACK_STATE_STOPPED)
+  if (track == NULL || track->state == DELOOP_TRACK_STATE_AWAITING ||
+      track->state == DELOOP_TRACK_STATE_PAUSED ||
+      track->state == DELOOP_TRACK_STATE_RECORDING) {
     return;
-  assert(track->type == deloop_TRACK_TYPE_STEREO);
+  }
+  assert(track->type == DELOOP_TRACK_TYPE_STEREO);
 
   if (lout != NULL) {
     assert(track->lrb != NULL && track->lrb->buf != NULL);

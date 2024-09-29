@@ -6,21 +6,22 @@
 
 #include <jack/jack.h>
 
-#define deloop_TRACK_DURATION_MAX_S ((uint32_t)120)
-#define deloop_TRACK_DURATION_DEFAULT_S ((uint32_t)5)
+#define DELOOP_TRACK_DURATION_MAX_S ((uint32_t)120)
+#define DELOOP_TRACK_DURATION_DEFAULT_S ((uint32_t)5)
 
 typedef enum {
-  deloop_TRACK_TYPE_INVALID,
-  deloop_TRACK_TYPE_MONO,
-  deloop_TRACK_TYPE_STEREO
+  DELOOP_TRACK_TYPE_INVALID,
+  DELOOP_TRACK_TYPE_MONO,
+  DELOOP_TRACK_TYPE_STEREO
 } deloop_track_type_t;
 
 typedef enum {
-  deloop_TRACK_STATE_INVALID,
-  deloop_TRACK_STATE_STOPPED,
-  deloop_TRACK_STATE_PLAYING,
-  deloop_TRACK_STATE_RECORDING,
-  deloop_TRACK_STATE_OVERDUBBING
+  DELOOP_TRACK_STATE_INVALID,
+  DELOOP_TRACK_STATE_AWAITING,
+  DELOOP_TRACK_STATE_PLAYING,
+  DELOOP_TRACK_STATE_PAUSED,
+  DELOOP_TRACK_STATE_RECORDING,
+  DELOOP_TRACK_STATE_OVERDUBBING
 } deloop_track_state_t;
 
 typedef struct {
@@ -56,7 +57,8 @@ void deloop_track_free(deloop_track_t *track);
 
 float deloop_track_get_progress(deloop_track_t *track);
 
-void deloop_track_set_duration(deloop_track_t *track, uint32_t duration_s);
+void deloop_track_reset(deloop_track_t *track);
+void deloop_track_handle_action(deloop_track_t *track);
 void deloop_track_start_playing(deloop_track_t *track);
 void deloop_track_stop_playing(deloop_track_t *track);
 void deloop_track_start_recording(deloop_track_t *track);
