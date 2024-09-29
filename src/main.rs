@@ -52,13 +52,13 @@ fn get_track_audio_opts(result: &mut HashMap<String, AudioDevice>, is_input: boo
                     .or_insert(AudioDevice {
                         FL_port_name: Some(port_name.clone()),
                         FR_port_name: None,
-                    }).FR_port_name = Some(port_name.clone());
+                    }).FL_port_name = Some(port_name.clone());
             } else if (*ports).port_type == bizzy_device_port_type_t_BIZZY_DEVICE_PORT_TYPE_STEREO_FR {
                 result.entry(client_name.clone())
                     .or_insert(AudioDevice {
                         FL_port_name: None,
                         FR_port_name: Some(port_name.clone()),
-                    }).FL_port_name = Some(port_name.clone());
+                    }).FR_port_name = Some(port_name.clone());
             } else {
                 panic!("Unknown port type: {}", (*ports).port_type);
             }
@@ -286,7 +286,7 @@ impl eframe::App for WavePlot {
                             repeat,
                             modifiers,
                         } => {
-                            if pressed {
+                            if *pressed {
                                 match key {
                                     egui::Key::Num0 => {
                                         unsafe {
@@ -296,6 +296,21 @@ impl eframe::App for WavePlot {
                                     egui::Key::Num1 => {
                                         unsafe {
                                             bizzy_client_set_focused_track(1);
+                                        }
+                                    },
+                                    egui::Key::Num2 => {
+                                        unsafe {
+                                            bizzy_client_set_focused_track(2);
+                                        }
+                                    },
+                                    egui::Key::Num3 => {
+                                        unsafe {
+                                            bizzy_client_set_focused_track(3);
+                                        }
+                                    },
+                                    egui::Key::Num4 => {
+                                        unsafe {
+                                            bizzy_client_set_focused_track(4);
                                         }
                                     },
                                     _ => {}
