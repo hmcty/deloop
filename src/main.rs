@@ -5,7 +5,8 @@
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
 use eframe::egui::{self, ComboBox, Event, ProgressBar};
-use std::collections::HashMap;
+use egui::{containers::Frame, emath, epaint, epaint::PathStroke, pos2, vec2, Color32, Pos2, Rect};
+use std::collections::{HashMap, VecDeque};
 use std::ffi::{CStr, CString};
 
 struct AudioDevice {
@@ -118,7 +119,7 @@ fn main() -> eframe::Result {
     eframe::run_native(
         "Plot",
         options,
-        Box::new(|_cc| Ok(Box::<WavePlot>::default())),
+        Box::new(|_cc| Ok(Box::<LoopDeLoopControlPanel>::default())),
     )
     .unwrap();
 
@@ -128,6 +129,8 @@ fn main() -> eframe::Result {
 
 struct TrackInterface {
     track_id: u32,
+    amp_rbuffer: VecDeque<f32>,
+    amp_wbuffer: VecDeque<f32>,
 }
 
 impl TrackInterface {
@@ -138,7 +141,11 @@ impl TrackInterface {
         //    panic!("Failed to create track");
         // }
 
-        TrackInterface { track_id }
+        TrackInterface {
+            track_id,
+            amp_rbuffer: VecDeque::with_capacity(100),
+            amp_wbuffer: VecDeque::with_capacity(100),
+        }
     }
 
     fn show(&mut self, ui: &mut egui::Ui) {
@@ -156,6 +163,76 @@ impl TrackInterface {
                 // Write track and id
                 ui.label(format!("Track {}", self.track_id));
 
+                Frame::canvas(ui.style()).show(ui, |ui| {
+                    let desired_size = ui.available_width() * vec2(1.0, 0.35);
+                    let (_id, rect) = ui.allocate_space(desired_size);
+
+                    let to_screen = emath::RectTransform::from_to(
+                        Rect::from_x_y_ranges(0.0..=1.0, -1.0..=1.0),
+                        rect,
+                    );
+
+                    let track_state = unsafe { (*deloop_client_get_track(self.track_id)).state };
+                    if track_state == deloop_track_state_t_DELOOP_TRACK_STATE_AWAITING {
+                        self.amp_rbuffer.clear();
+                        self.amp_wbuffer.clear();
+                        return;
+                    }
+                    let mut shapes = vec![];
+
+                    let colorr = if ui.visuals().dark_mode {
+                        Color32::from_additive_luminance(196)
+                    } else {
+                        Color32::from_black_alpha(240)
+                    };
+
+                    let colorw = Color32::from_rgb(125, 14, 46);
+
+                    let mut ramp = unsafe { (*deloop_client_get_track(self.track_id)).ramp };
+                    ramp *= 100.0;
+                    ramp = ramp.clamp(-1.0, 1.0);
+                    let rpoints: Vec<Pos2> = (0..self.amp_rbuffer.len())
+                        .map(|i| {
+                            let t = i as f32 / (self.amp_rbuffer.len() as f32);
+                            let y = self.amp_rbuffer.get(i).unwrap();
+                            to_screen * pos2(t, *y)
+                        })
+                        .collect();
+                    if self.amp_rbuffer.len() >= 100 {
+                        self.amp_rbuffer.pop_back();
+                    }
+                    self.amp_rbuffer.push_front(ramp);
+
+                    let thickness = 2.5;
+                    shapes.push(epaint::Shape::line(
+                        rpoints,
+                        PathStroke::new(thickness, colorr),
+                    ));
+
+                    let mut wamp = unsafe { (*deloop_client_get_track(self.track_id)).wamp };
+                    wamp *= 100.0;
+                    wamp = wamp.clamp(-1.0, 1.0);
+                    let pointsw: Vec<Pos2> = (0..self.amp_wbuffer.len())
+                        .map(|i| {
+                            let t = i as f32 / (self.amp_wbuffer.len() as f32);
+                            let y = self.amp_wbuffer.get(i).unwrap();
+                            to_screen * pos2(t, *y)
+                        })
+                        .collect();
+
+                    if self.amp_wbuffer.len() >= 100 {
+                        self.amp_wbuffer.pop_back();
+                    }
+                    self.amp_wbuffer.push_front(wamp);
+
+                    shapes.push(epaint::Shape::line(
+                        pointsw,
+                        PathStroke::new(thickness, colorw),
+                    ));
+
+                    ui.painter().extend(shapes);
+                });
+
                 let progress: f32 =
                     unsafe { deloop_track_get_progress(deloop_client_get_track(self.track_id)) };
                 ui.add(ProgressBar::new(progress));
@@ -163,7 +240,7 @@ impl TrackInterface {
     }
 }
 
-struct WavePlot {
+struct LoopDeLoopControlPanel {
     audio_input_map: HashMap<String, AudioDevice>,
 
     audio_output_map: HashMap<String, AudioDevice>,
@@ -175,7 +252,7 @@ struct WavePlot {
     tracks: Vec<TrackInterface>,
 }
 
-impl Default for WavePlot {
+impl Default for LoopDeLoopControlPanel {
     fn default() -> Self {
         let mut audio_input_map = HashMap::new();
         get_track_audio_opts(&mut audio_input_map, false);
@@ -202,7 +279,7 @@ impl Default for WavePlot {
     }
 }
 
-impl eframe::App for WavePlot {
+impl eframe::App for LoopDeLoopControlPanel {
     fn update(&mut self, ctx: &egui::Context, _: &mut eframe::Frame) {
         ctx.request_repaint(); // Run continously
 
