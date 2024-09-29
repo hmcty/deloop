@@ -152,7 +152,7 @@ deloop_track_t *deloop_track_create(deloop_track_type_t type,
   track->duration_s = deloop_TRACK_DURATION_DEFAULT_S;
 
   size_t buf_size = deloop_TRACK_DURATION_DEFAULT_S * frame_rate;
-  printf("Creating track with buffer size %lu\n", buf_size);
+  DELOOP_LOG_INFO("Creating track with buffer size %lu\n", buf_size);
 
   track->lrb = deloop_track_ringbuf_create(buf_size);
   switch (type) {
@@ -163,7 +163,7 @@ deloop_track_t *deloop_track_create(deloop_track_type_t type,
     track->rrb = NULL;
     break;
   default:
-    printf("Invalid track type\n");
+    DELOOP_LOG_ERROR("Invalid track type");
     deloop_track_free(track);
     return NULL;
   }
@@ -185,7 +185,7 @@ void deloop_track_set_duration(deloop_track_t *track, uint32_t duration_s) {
   if (track == NULL)
     return;
 
-  deloop_log_info("Setting track duration to %d seconds", duration_s);
+  DELOOP_LOG_INFO("Setting track duration to %d seconds", duration_s);
   track->duration_s = duration_s;
 
   size_t buf_size = duration_s * track->frame_rate;
@@ -208,7 +208,7 @@ void deloop_track_start_playing(deloop_track_t *track) {
   if (track == NULL)
     return;
 
-  printf("Starting playing\n");
+  DELOOP_LOG_INFO("Starting playing");
   track->state = deloop_TRACK_STATE_PLAYING;
 }
 
@@ -216,7 +216,7 @@ void deloop_track_stop_playing(deloop_track_t *track) {
   if (track == NULL)
     return;
 
-  printf("Stopping playing\n");
+  DELOOP_LOG_INFO("Stopping playing");
   track->state = deloop_TRACK_STATE_STOPPED;
   if (track->lrb != NULL)
     track->lrb->read = 0;
@@ -232,7 +232,7 @@ void deloop_track_start_recording(deloop_track_t *track) {
   deloop_track_ringbuf_reset(track->lrb);
   deloop_track_ringbuf_reset(track->rrb);
 
-  printf("Starting recording\n");
+  DELOOP_LOG_INFO("Starting recording");
   track->state = deloop_TRACK_STATE_RECORDING;
 }
 
@@ -240,7 +240,7 @@ void deloop_track_stop_recording(deloop_track_t *track) {
   if (track == NULL)
     return;
 
-  printf("Stopping recording\n");
+  DELOOP_LOG_INFO("Stopping recording");
   track->state = deloop_TRACK_STATE_OVERDUBBING;
 }
 
@@ -268,7 +268,8 @@ void deloop_track_stereo_tick(deloop_track_t *track, float *lin, float *rin,
   static deloop_track_state_t last_state = deloop_TRACK_STATE_STOPPED;
 
   if (track->state != last_state) {
-    printf("Track state changed from %d to %d\n", last_state, track->state);
+    DELOOP_LOG_INFO("Track state changed from %d to %d", last_state,
+                    track->state);
   }
 
   if (track->state != deloop_TRACK_STATE_RECORDING &&
