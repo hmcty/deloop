@@ -4,13 +4,14 @@
 
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
-use std::ffi::{CStr, CString};
-use eframe::egui::{self, DragValue, Event, Vec2, Slider, ProgressBar, ComboBox};
+use eframe::egui::{self, ComboBox, DragValue, Event, ProgressBar, Slider, Vec2};
 use std::collections::HashMap;
+use std::ffi::{CStr, CString};
 
 struct AudioDevice {
     FL_port_name: Option<String>,
     FR_port_name: Option<String>,
+    is_selected: bool,
 }
 
 struct MidiDevice {
@@ -18,47 +19,72 @@ struct MidiDevice {
 }
 
 fn get_track_midi_opts(result: &mut HashMap<String, MidiDevice>) {
-    unsafe{
-        let mut ports = bizzy_client_find_midi_devices();
+    unsafe {
+        let mut ports = deloop_client_find_midi_devices();
         while !ports.is_null() {
             let client_name = CStr::from_ptr((*ports).client_name)
-                .to_str().unwrap().to_owned();
+                .to_str()
+                .unwrap()
+                .to_owned();
             let port_name = CStr::from_ptr((*ports).port_name)
-                .to_str().unwrap().to_owned();
+                .to_str()
+                .unwrap()
+                .to_owned();
 
-            result.insert(client_name.clone(), MidiDevice {
-                port_name: port_name.clone(),
-            });
+            result.insert(
+                client_name.clone(),
+                MidiDevice {
+                    port_name: port_name.clone(),
+                },
+            );
 
             println!("Client: {}, Port: {}", client_name, port_name);
             ports = (*ports).last;
         }
 
-        bizzy_client_device_list_free(ports);
+        deloop_client_device_list_free(ports);
     };
 }
 
 fn get_track_audio_opts(result: &mut HashMap<String, AudioDevice>, is_input: bool) {
-    unsafe{
-        let mut ports = bizzy_client_find_audio_devices(is_input, !is_input);
+    unsafe {
+        let mut ports = deloop_client_find_audio_devices(is_input, !is_input);
         while !ports.is_null() {
             let client_name = CStr::from_ptr((*ports).client_name)
-                .to_str().unwrap().to_owned();
+                .to_str()
+                .unwrap()
+                .to_owned();
             let port_name = CStr::from_ptr((*ports).port_name)
-                .to_str().unwrap().to_owned();
+                .to_str()
+                .unwrap()
+                .to_owned();
 
-            if (*ports).port_type == bizzy_device_port_type_t_BIZZY_DEVICE_PORT_TYPE_STEREO_FL {
-                result.entry(client_name.clone())
+            if (*ports).port_type == deloop_device_port_type_t_deloop_DEVICE_PORT_TYPE_STEREO_FL {
+                result
+                    .entry(client_name.clone())
                     .or_insert(AudioDevice {
                         FL_port_name: Some(port_name.clone()),
                         FR_port_name: None,
-                    }).FL_port_name = Some(port_name.clone());
-            } else if (*ports).port_type == bizzy_device_port_type_t_BIZZY_DEVICE_PORT_TYPE_STEREO_FR {
-                result.entry(client_name.clone())
+                        is_selected: false,
+                    })
+                    .FL_port_name = Some(port_name.clone());
+            } else if (*ports).port_type
+                == deloop_device_port_type_t_deloop_DEVICE_PORT_TYPE_STEREO_FR
+            {
+                result
+                    .entry(client_name.clone())
                     .or_insert(AudioDevice {
                         FL_port_name: None,
                         FR_port_name: Some(port_name.clone()),
-                    }).FR_port_name = Some(port_name.clone());
+                        is_selected: false,
+                    })
+                    .FR_port_name = Some(port_name.clone());
+            } else if (*ports).port_type == deloop_device_port_type_t_deloop_DEVICE_PORT_TYPE_MONO {
+                result.entry(client_name.clone()).or_insert(AudioDevice {
+                    FL_port_name: Some(port_name.clone()),
+                    FR_port_name: Some(port_name.clone()),
+                    is_selected: false,
+                });
             } else {
                 panic!("Unknown port type: {}", (*ports).port_type);
             }
@@ -67,7 +93,7 @@ fn get_track_audio_opts(result: &mut HashMap<String, AudioDevice>, is_input: boo
             ports = (*ports).last;
         }
 
-        bizzy_client_device_list_free(ports);
+        deloop_client_device_list_free(ports);
     };
 }
 
@@ -81,10 +107,10 @@ fn truncate_string(s: &String, max_len: usize) -> String {
 
 fn main() -> eframe::Result {
     env_logger::init(); // Log to stderr (if you run with `RUST_LOG=debug`).
-    unsafe { 
-        let ret = bizzy_client_init();
+    unsafe {
+        let ret = deloop_client_init();
         if ret != 0 {
-            panic!("Failed to initialize Bizzy");
+            panic!("Failed to initialize deloop");
         }
     }
 
@@ -95,7 +121,7 @@ fn main() -> eframe::Result {
         Box::new(|_cc| Ok(Box::<WavePlot>::default())),
     );
 
-    unsafe { bizzy_client_cleanup() }
+    unsafe { deloop_client_cleanup() }
     Ok(())
 }
 
@@ -110,7 +136,7 @@ impl TrackInterface {
     fn new() -> TrackInterface {
         let mut track_id = 0;
         unsafe {
-            track_id = bizzy_client_add_track();
+            track_id = deloop_client_add_track();
         }
         // @TODO: Make IDs non-zero random hashes.
         // if track_id == 0 {
@@ -126,9 +152,7 @@ impl TrackInterface {
     }
 
     fn show(&mut self, ui: &mut egui::Ui) {
-        let is_focused = unsafe {
-            bizzy_client_get_focused_track() == self.track_id
-        };
+        let is_focused = unsafe { deloop_client_get_focused_track() == self.track_id };
 
         ui.separator();
 
@@ -142,9 +166,8 @@ impl TrackInterface {
                 // Write track and id
                 ui.label(format!("Track {}", self.track_id));
 
-                let progress: f32 = unsafe {
-                    bizzy_track_get_progress(bizzy_client_get_track(self.track_id))
-                };
+                let progress: f32 =
+                    unsafe { deloop_track_get_progress(deloop_client_get_track(self.track_id)) };
                 ui.add(ProgressBar::new(progress));
             });
     }
@@ -152,7 +175,6 @@ impl TrackInterface {
 
 struct WavePlot {
     audio_input_map: HashMap<String, AudioDevice>,
-    input_device: String,
 
     audio_output_map: HashMap<String, AudioDevice>,
     output_device: String,
@@ -174,9 +196,11 @@ impl Default for WavePlot {
         let mut midi_control_map = HashMap::new();
         get_track_midi_opts(&mut midi_control_map);
 
+        let mut tracks = Vec::new();
+        tracks.push(TrackInterface::new());
+
         Self {
             audio_input_map: audio_input_map,
-            input_device: "None".to_string(),
 
             audio_output_map: audio_output_map,
             output_device: "None".to_string(),
@@ -184,7 +208,7 @@ impl Default for WavePlot {
             midi_control_map: midi_control_map,
             control_device: "None".to_string(),
 
-            tracks: Vec::new(),
+            tracks: tracks,
         }
     }
 }
@@ -192,47 +216,54 @@ impl Default for WavePlot {
 impl eframe::App for WavePlot {
     fn update(&mut self, ctx: &egui::Context, _: &mut eframe::Frame) {
         ctx.request_repaint(); // Run continously
-        
+
         egui::SidePanel::left("").show(ctx, |ui| {
-            ComboBox::from_label("Input Device")
-                .selected_text(&self.input_device)
-                .show_ui(ui, |ui| {
-                    for (client, device) in &self.audio_input_map {
-                        let value = ui.selectable_value(
-                            &mut self.input_device,
-                            truncate_string(client, 15),
-                            client);
-                        if value.clicked() {
-                            unsafe {
-                                let source_FL = device.FL_port_name
-                                    .as_ref().map(String::as_str).unwrap();
-                                let source_FR = device.FR_port_name
-                                    .as_ref().map(String::as_str).unwrap();
-                                bizzy_client_configure_source(
-                                    CString::new(source_FL).unwrap().as_ptr(),
-                                    CString::new(source_FR).unwrap().as_ptr(),
-                                );
-                            }
+            ui.label("Input Devices");
+            for (client, device) in &mut self.audio_input_map {
+                if ui.checkbox(&mut device.is_selected, client).clicked() {
+                    if device.is_selected {
+                        unsafe {
+                            let source_FL =
+                                device.FL_port_name.as_ref().map(String::as_str).unwrap();
+                            let source_FR =
+                                device.FR_port_name.as_ref().map(String::as_str).unwrap();
+                            deloop_client_add_source(
+                                CString::new(source_FL).unwrap().as_ptr(),
+                                CString::new(source_FR).unwrap().as_ptr(),
+                            );
+                        }
+                    } else {
+                        unsafe {
+                            let source_FL =
+                                device.FL_port_name.as_ref().map(String::as_str).unwrap();
+                            let source_FR =
+                                device.FR_port_name.as_ref().map(String::as_str).unwrap();
+                            deloop_client_remove_source(
+                                CString::new(source_FL).unwrap().as_ptr(),
+                                CString::new(source_FR).unwrap().as_ptr(),
+                            );
                         }
                     }
-                });
+                }
+            }
 
+            ui.separator();
             ComboBox::from_label("Output Device")
                 .selected_text(&self.output_device)
                 .show_ui(ui, |ui| {
                     for (client, device) in &self.audio_output_map {
-                        let value =
-                            ui.selectable_value(
-                                &mut self.output_device,
-                                truncate_string(client, 15),
-                                client);
+                        let value = ui.selectable_value(
+                            &mut self.output_device,
+                            truncate_string(client, 15),
+                            client,
+                        );
                         if value.clicked() {
                             unsafe {
-                                let sink_FL = device.FL_port_name
-                                    .as_ref().map(String::as_str).unwrap();
-                                let sink_FR = device.FR_port_name
-                                    .as_ref().map(String::as_str).unwrap();
-                                bizzy_client_configure_sink(
+                                let sink_FL =
+                                    device.FL_port_name.as_ref().map(String::as_str).unwrap();
+                                let sink_FR =
+                                    device.FR_port_name.as_ref().map(String::as_str).unwrap();
+                                deloop_client_configure_sink(
                                     CString::new(sink_FL).unwrap().as_ptr(),
                                     CString::new(sink_FR).unwrap().as_ptr(),
                                 );
@@ -248,11 +279,12 @@ impl eframe::App for WavePlot {
                         let value = ui.selectable_value(
                             &mut self.control_device,
                             truncate_string(client, 15),
-                            client);
+                            client,
+                        );
                         if value.clicked() {
                             unsafe {
                                 let control_port = device.port_name.as_str();
-                                bizzy_client_configure_control(
+                                deloop_client_configure_control(
                                     CString::new(control_port).unwrap().as_ptr(),
                                 );
                             }
@@ -288,30 +320,20 @@ impl eframe::App for WavePlot {
                         } => {
                             if *pressed {
                                 match key {
-                                    egui::Key::Num0 => {
-                                        unsafe {
-                                            bizzy_client_set_focused_track(0);
-                                        }
+                                    egui::Key::Num0 => unsafe {
+                                        deloop_client_set_focused_track(0);
                                     },
-                                    egui::Key::Num1 => {
-                                        unsafe {
-                                            bizzy_client_set_focused_track(1);
-                                        }
+                                    egui::Key::Num1 => unsafe {
+                                        deloop_client_set_focused_track(1);
                                     },
-                                    egui::Key::Num2 => {
-                                        unsafe {
-                                            bizzy_client_set_focused_track(2);
-                                        }
+                                    egui::Key::Num2 => unsafe {
+                                        deloop_client_set_focused_track(2);
                                     },
-                                    egui::Key::Num3 => {
-                                        unsafe {
-                                            bizzy_client_set_focused_track(3);
-                                        }
+                                    egui::Key::Num3 => unsafe {
+                                        deloop_client_set_focused_track(3);
                                     },
-                                    egui::Key::Num4 => {
-                                        unsafe {
-                                            bizzy_client_set_focused_track(4);
-                                        }
+                                    egui::Key::Num4 => unsafe {
+                                        deloop_client_set_focused_track(4);
                                     },
                                     _ => {}
                                 }

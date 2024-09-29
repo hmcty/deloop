@@ -1,5 +1,5 @@
 [package]
-name = "bizzy_gui"
+name = "deloop_gui"
 version = "0.1.0"
 edition = "2021"
 
@@ -13,4 +13,3 @@ libc = "0.2.158"
 bindgen = "0.70.1"
 cc = "1.1.15"
 pkg-config = "0.3.30"
-

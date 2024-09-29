@@ -1,8 +1,8 @@
 // build.rs
 
-use std::process::Command;
 use std::env;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
 fn main() {
     pkg_config::Config::new().probe("jack").unwrap();
@@ -10,8 +10,8 @@ fn main() {
 
     let bindings = bindgen::Builder::default()
         .clang_arg("-Isrc")
-        .header("src/bizzy/track.h")
-        .header("src/bizzy/client.h")
+        .header("src/deloop/track.h")
+        .header("src/deloop/client.h")
         .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
         .generate()
         .expect("Unable to generate bindings");
@@ -23,10 +23,10 @@ fn main() {
 
     cc::Build::new()
         .include("src")
-        .file("src/bizzy/client.c")
-        .file("src/bizzy/track.c")
-        .file("src/bizzy/logging.c")
-        .compile("bizzy"); 
-    println!("cargo:rerun-if-changed=src/bizzy.c");
+        .file("src/deloop/client.c")
+        .file("src/deloop/track.c")
+        .file("src/deloop/logging.c")
+        .compile("deloop");
+    println!("cargo:rerun-if-changed=src/deloop.c");
     println!("cargo:rustc-link-lib=jack");
 }
