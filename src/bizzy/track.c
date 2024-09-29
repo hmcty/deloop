@@ -22,6 +22,14 @@
      __typeof__ (b) _b = (b); \
      _a < _b ? _a : _b; })
 
+/*
+ * reset - memset to zero, reset pointers
+ * write - overdub incoming data, update write pointer
+ * read - read data, update read pointer
+ *
+ *
+ */
+
 bizzy_track_ringbuf_t *bizzy_track_ringbuf_create(size_t cnt) {
   bizzy_track_ringbuf_t *rb =
     (bizzy_track_ringbuf_t *) malloc(sizeof(bizzy_track_ringbuf_t));
@@ -29,30 +37,62 @@ bizzy_track_ringbuf_t *bizzy_track_ringbuf_create(size_t cnt) {
 
   rb->buf = (float *) malloc(cnt * sizeof(float));
   assert(rb->buf != NULL);
-
   rb->buf_size = cnt;
-  rb->size = cnt;
-  rb->read = 0;
-  rb->write = 0;
 
+  bizzy_track_ringbuf_reset(rb);
   return rb;
 }
 
-void bizzy_track_ringbuf_write(bizzy_track_ringbuf_t *rb, float *data, size_t cnt) {
+void bizzy_track_ringbuf_reset(bizzy_track_ringbuf_t *rb) {
+  if (rb == NULL) return;
+
+  if (rb->buf != NULL) {
+    memset(rb->buf, 0, rb->buf_size * sizeof(float));
+  }
+  rb->size = rb->buf_size;
+  rb->read = 0;
+  rb->write = 0;
+}
+
+size_t bizzy_track_ringbuf_write(
+  bizzy_track_ringbuf_t *rb,
+  float *data,
+  size_t cnt,
+  bool overdub) {
   if ((rb == NULL) || (data == NULL)) return 0;
-  if (rb->write >= rb->buf_size) {
-    return 0;
+  
+  // If overdubbing, only write up to the buffer size
+  size_t max_size = overdub ? rb->size : rb->buf_size;
+  if (rb->write >= max_size) {
+    if (overdub) {
+      rb->write = 0;
+    } else {
+      return 0;
+    }
   }
 
-  size_t end = MIN(rb->write + cnt, rb->buf_size);
-  cnt = end - rb->write;
+  size_t end = MIN(rb->write + cnt, max_size);
+  size_t icnt = end - rb->write;
   size_t nbytes = cnt * sizeof(float);
   
   assert(rb->buf != NULL);
-  memcpy(rb->buf + rb->write, data, nbytes);
-  rb->write += cnt;
+  for (size_t i = 0; i < icnt; i++) {
+    rb->buf[rb->write + i] += data[i];
+  }
+
+  if (overdub && icnt < cnt) {
+    assert(rb->buf != NULL);
+    for (size_t i = 0; i < (cnt - icnt); i++) {
+      rb->buf[i] += data[icnt + i];
+    }
+
+    rb->write = (cnt - icnt);
+  } else {
+    rb->write += icnt;
+  }
+  rb->size = MAX(rb->size, rb->write);
   
-  return 0;
+  return cnt;
 }
 
 void bizzy_track_ringbuf_read(bizzy_track_ringbuf_t *rb, float *data, size_t cnt) {
@@ -99,6 +139,7 @@ void bizzy_track_ringbuf_free(bizzy_track_ringbuf_t *rb) {
 bizzy_track_t *bizzy_track_create(bizzy_track_type_t type, jack_nframes_t frame_rate) {
   bizzy_track_t *track = (bizzy_track_t *) malloc(sizeof(bizzy_track_t));
   track->type = type;
+  track->state = BIZZY_TRACK_STATE_STOPPED;
   track->frame_rate = frame_rate;
   track->duration_s = BIZZY_TRACK_DURATION_DEFAULT_S;
   
@@ -155,14 +196,14 @@ void bizzy_track_start_playing(bizzy_track_t *track) {
   if (track == NULL) return;
 
   printf("Starting playing\n");
-  track->is_playing = true;
+  track->state = BIZZY_TRACK_STATE_PLAYING;
 }
 
 void bizzy_track_stop_playing(bizzy_track_t *track) {
   if (track == NULL) return;
 
   printf("Stopping playing\n");
-  track->is_playing = false;
+  track->state = BIZZY_TRACK_STATE_STOPPED;
   if (track->lrb != NULL) track->lrb->read = 0;
   if (track->rrb != NULL) track->rrb->read = 0;
 }
@@ -171,23 +212,25 @@ void bizzy_track_start_recording(bizzy_track_t *track) {
   if (track == NULL) return;
 
   bizzy_track_stop_playing(track);
+  bizzy_track_ringbuf_reset(track->lrb);
+  bizzy_track_ringbuf_reset(track->rrb);
 
   printf("Starting recording\n");
-  track->is_recording = true;
+  track->state = BIZZY_TRACK_STATE_RECORDING;
 }
 
 void bizzy_track_stop_recording(bizzy_track_t *track) {
   if (track == NULL) return;
 
   printf("Stopping recording\n");
-  track->is_recording = false;
-  bizzy_track_start_playing(track);
+  track->state = BIZZY_TRACK_STATE_OVERDUBBING;
 }
 
 bool bizzy_track_is_recording(bizzy_track_t *track) {
   if (track == NULL) return false;
 
-  return track->is_recording;
+  return track->state == BIZZY_TRACK_STATE_RECORDING ||
+         track->state == BIZZY_TRACK_STATE_OVERDUBBING;
 }
 
 float bizzy_track_get_progress(bizzy_track_t *track) {
@@ -204,30 +247,38 @@ void bizzy_track_stereo_tick(
   size_t cnt) {
   if (track == NULL) return;
   assert(track->type == BIZZY_TRACK_TYPE_STEREO);
+  static bizzy_track_state_t last_state = BIZZY_TRACK_STATE_STOPPED;
 
-  if (!track->is_recording) {
-    if (track->lrb != NULL && track->lrb->write > 0) {
+  if (track->state != last_state) {
+    printf("Track state changed from %d to %d\n", last_state, track->state);
+  }
+
+  if (track->state != BIZZY_TRACK_STATE_RECORDING &&
+      last_state == BIZZY_TRACK_STATE_RECORDING) {
+    if (track->lrb != NULL) {
       track->lrb->size = track->lrb->write;
       track->lrb->write = 0;
     }
 
-    if (track->rrb != NULL && track->rrb->write > 0) {
+    if (track->rrb != NULL) {
       track->rrb->size = track->rrb->write;
       track->rrb->write = 0;
     }
-
-    return;
   }
 
-  if (lin != NULL) {
-    assert(track->lrb != NULL && track->lrb->buf != NULL);
-    bizzy_track_ringbuf_write(track->lrb, lin, cnt);
+  if (bizzy_track_is_recording(track)) {
+    if (lin != NULL) {
+      assert(track->lrb != NULL && track->lrb->buf != NULL);
+      bizzy_track_ringbuf_write(track->lrb, lin, cnt, track->state == BIZZY_TRACK_STATE_OVERDUBBING);
+    }
+
+    if (rin != NULL) {
+      assert(track->rrb != NULL && track->rrb->buf != NULL);
+      bizzy_track_ringbuf_write(track->rrb, rin, cnt, track->state == BIZZY_TRACK_STATE_OVERDUBBING);
+    }
   }
 
-  if (rin != NULL) {
-    assert(track->rrb != NULL && track->rrb->buf != NULL);
-    bizzy_track_ringbuf_write(track->rrb, rin, cnt);
-  }
+  last_state = track->state;
 }
 
 void bizzy_track_stereo_read(
@@ -235,7 +286,7 @@ void bizzy_track_stereo_read(
   float *lout,
   float *rout,
   size_t cnt) {
-  if ((track == NULL) || !track->is_playing) return;
+  if ((track == NULL) || track->state == BIZZY_TRACK_STATE_STOPPED) return;
   assert(track->type == BIZZY_TRACK_TYPE_STEREO);
 
   if (lout != NULL) {

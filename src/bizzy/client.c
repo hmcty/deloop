@@ -59,9 +59,24 @@ int process(jack_nframes_t nframes, void *arg) {
     if ((ctrl_event_data[0] & 0xB0) != 0xB0) continue;
     if (ctrl_event_data[1] != 0x40) continue;
     if (ctrl_event_data[2] == 0x7F) {
-      bizzy_track_start_recording(track);
+      switch (track->state) {
+        case BIZZY_TRACK_STATE_STOPPED:
+          bizzy_track_start_recording(track);
+          break;
+        case BIZZY_TRACK_STATE_PLAYING:
+          bizzy_track_stop_playing(track);
+          break;
+        case BIZZY_TRACK_STATE_RECORDING:
+          bizzy_track_stop_recording(track);
+          break;
+        case BIZZY_TRACK_STATE_OVERDUBBING:
+          bizzy_track_start_playing(track);
+          break;
+        default:
+          break;
+      }
     } else {
-      bizzy_track_stop_recording(track);
+      // bizzy_track_stop_recording(track);
     }
   }
 
@@ -78,7 +93,7 @@ int process(jack_nframes_t nframes, void *arg) {
   // If playback not active, exit early
   for (uint32_t i = 0; i < state_.num_tracks; i++) {
     if (state_.track_list[i] == NULL) continue;
-    if (!state_.track_list[i]->is_playing) break;
+    if (state_.track_list[i]->state == BIZZY_TRACK_STATE_STOPPED) continue;
 
     bizzy_track_stereo_read(
       state_.track_list[i],

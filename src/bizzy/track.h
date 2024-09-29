@@ -15,6 +15,14 @@ typedef enum {
   BIZZY_TRACK_TYPE_STEREO
 } bizzy_track_type_t;
 
+typedef enum {
+  BIZZY_TRACK_STATE_INVALID,
+  BIZZY_TRACK_STATE_STOPPED,
+  BIZZY_TRACK_STATE_PLAYING,
+  BIZZY_TRACK_STATE_RECORDING,
+  BIZZY_TRACK_STATE_OVERDUBBING
+} bizzy_track_state_t;
+
 typedef struct {
   float *buf;
   size_t buf_size;
@@ -25,18 +33,18 @@ typedef struct {
 } bizzy_track_ringbuf_t;
 
 bizzy_track_ringbuf_t *bizzy_track_ringbuf_create(size_t buf_size);
-void bizzy_track_ringbuf_write(
-  bizzy_track_ringbuf_t *rb, float *data, size_t cnt);
+void bizzy_track_ringbuf_reset(bizzy_track_ringbuf_t *rb);
+size_t bizzy_track_ringbuf_write(
+  bizzy_track_ringbuf_t *rb, float *data, size_t cnt, bool overdub);
 void bizzy_track_ringbuf_read(
   bizzy_track_ringbuf_t *rb, float *data, size_t cnt);
 void bizzy_track_ringbuf_free(bizzy_track_ringbuf_t *rb);
 
 typedef struct {
   bizzy_track_type_t type;
+  bizzy_track_state_t state;
   jack_nframes_t frame_rate;
   uint32_t duration_s;
-  bool is_recording;
-  bool is_playing;
 
   bizzy_track_ringbuf_t *lrb;
   bizzy_track_ringbuf_t *rrb; // Stereo only
