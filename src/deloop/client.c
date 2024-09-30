@@ -354,8 +354,14 @@ void deloop_client_configure_sink(const char *sink_FL, const char *sink_FR) {
   // @todo(hmcty): Check return values
   jack_port_disconnect(state_.client, state_.output_FL);
   jack_port_disconnect(state_.client, state_.output_FR);
-  jack_connect(state_.client, jack_port_name(state_.output_FL), sink_FL);
-  jack_connect(state_.client, jack_port_name(state_.output_FR), sink_FR);
+
+  if (sink_FL != NULL) {
+    jack_connect(state_.client, jack_port_name(state_.output_FL), sink_FL);
+  }
+
+  if (sink_FR != NULL) {
+    jack_connect(state_.client, jack_port_name(state_.output_FR), sink_FR);
+  }
 }
 
 void deloop_client_configure_control(const char *control) {

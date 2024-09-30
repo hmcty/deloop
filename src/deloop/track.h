@@ -44,8 +44,11 @@ void deloop_track_ringbuf_free(deloop_track_ringbuf_t *rb);
 typedef struct {
   deloop_track_type_t type;
   deloop_track_state_t state;
+  deloop_track_state_t prev_state;
+
   jack_nframes_t frame_rate;
   uint32_t duration_s;
+
   float ramp;
   float wamp;
 
@@ -58,15 +61,9 @@ deloop_track_t *deloop_track_create(deloop_track_type_t type,
 void deloop_track_free(deloop_track_t *track);
 
 float deloop_track_get_progress(deloop_track_t *track);
-
 void deloop_track_reset(deloop_track_t *track);
 void deloop_track_handle_action(deloop_track_t *track);
-void deloop_track_start_playing(deloop_track_t *track);
-void deloop_track_stop_playing(deloop_track_t *track);
-void deloop_track_start_recording(deloop_track_t *track);
-void deloop_track_stop_recording(deloop_track_t *track);
 bool deloop_track_is_recording(deloop_track_t *track);
-
 void deloop_track_stereo_tick(deloop_track_t *track, float *lin, float *rin,
                               size_t cnt);
 void deloop_track_stereo_read(deloop_track_t *track, float *lout, float *rout,
