@@ -34,6 +34,7 @@ static struct app_state_t {
   uint32_t num_tracks;
   uint32_t focus_track;
   deloop_track_t *track_list[MAX_NUM_TRACKS];
+  bool action_queued;
 } state_;
 
 int process(jack_nframes_t nframes, void *arg) {
@@ -52,6 +53,12 @@ int process(jack_nframes_t nframes, void *arg) {
 
   ctrl_buffer = jack_port_get_buffer(state_.control_port, nframes);
   ctrl_event_count = jack_midi_get_event_count(ctrl_buffer);
+
+  if (state_.action_queued) {
+    state_.action_queued = false;
+    deloop_track_handle_action(track);
+  }
+
   for (int i = 0; i < ctrl_event_count; i++) {
     jack_midi_event_get(&ctrl_event, ctrl_buffer, i);
     ctrl_event_data = ctrl_event.buffer;
@@ -231,6 +238,12 @@ deloop_device_t *deloop_client_find_audio_devices(bool is_input,
     } else if (strcmp(ch + 1, "playback_FR") == 0) {
       device_type = deloop_DEVICE_TYPE_AUDIO_INPUT;
       port_type = DELOOP_DEVICE_PORT_TYPE_STEREO_FR;
+    } else if (strcmp(ch + 1, "capture_FL") == 0) {
+      device_type = deloop_DEVICE_TYPE_AUDIO_INPUT;
+      port_type = DELOOP_DEVICE_PORT_TYPE_STEREO_FL;
+    } else if (strcmp(ch + 1, "capture_FR") == 0) {
+      device_type = deloop_DEVICE_TYPE_AUDIO_INPUT;
+      port_type = DELOOP_DEVICE_PORT_TYPE_STEREO_FR;
     } else if (strcmp(ch + 1, "capture_MONO") == 0) {
       device_type = deloop_DEVICE_TYPE_AUDIO_INPUT;
       port_type = DELOOP_DEVICE_PORT_TYPE_MONO;
@@ -336,6 +349,10 @@ void deloop_client_set_focused_track(deloop_client_track_id_t track_num) {
 
 deloop_client_track_id_t deloop_client_get_focused_track() {
   return state_.focus_track;
+}
+
+void deloop_client_perform_action() {
+  state_.action_queued = true;
 }
 
 void deloop_client_add_source(const char *source_FL, const char *source_FR) {

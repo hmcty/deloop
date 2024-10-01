@@ -37,6 +37,8 @@ deloop_track_t *deloop_client_get_track(deloop_client_track_id_t);
 void deloop_client_set_focused_track(deloop_client_track_id_t);
 deloop_client_track_id_t deloop_client_get_focused_track();
 
+void deloop_client_perform_action();
+
 void deloop_client_add_source(const char *source_FL, const char *source_FR);
 void deloop_client_remove_source(const char *source_FL, const char *source_FR);
 void deloop_client_configure_sink(const char *output_FL, const char *output_FR);
