@@ -21,6 +21,10 @@ pub fn client_add_track() -> u32 {
     unsafe { deloop_client_add_track() }
 }
 
+pub fn client_perform_action() {
+    unsafe { deloop_client_perform_action() }
+}
+
 pub fn client_get_focused_track() -> u32 {
     unsafe { deloop_client_get_focused_track() }
 }
