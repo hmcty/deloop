@@ -150,6 +150,7 @@ deloop_track_t *deloop_track_create(deloop_track_type_t type,
   track->state = DELOOP_TRACK_STATE_AWAITING;
   track->frame_rate = frame_rate;
   track->duration_s = DELOOP_TRACK_DURATION_DEFAULT_S;
+  track->playback_speed = 1.0;
 
   size_t buf_size = DELOOP_TRACK_DURATION_MAX_S * frame_rate;
   DELOOP_LOG_INFO("Creating track with buffer size %lu\n", buf_size);
@@ -243,6 +244,13 @@ void deloop_track_handle_action(deloop_track_t *track) {
   }
 
   last_action_time = time(NULL);
+}
+
+void deloop_track_set_playback_speed(deloop_track_t *track, float speed) {
+  if (track == NULL)
+    return;
+
+  track->playback_speed = speed;
 }
 
 bool deloop_track_is_recording(deloop_track_t *track) {
