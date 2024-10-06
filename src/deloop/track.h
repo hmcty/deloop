@@ -48,6 +48,7 @@ typedef struct {
 
   jack_nframes_t frame_rate;
   uint32_t duration_s;
+  float playback_speed;
 
   float ramp;
   float wamp;
@@ -63,6 +64,7 @@ void deloop_track_free(deloop_track_t *track);
 float deloop_track_get_progress(deloop_track_t *track);
 void deloop_track_reset(deloop_track_t *track);
 void deloop_track_handle_action(deloop_track_t *track);
+void deloop_track_set_playback_speed(deloop_track_t *track, float speed);
 bool deloop_track_is_recording(deloop_track_t *track);
 void deloop_track_stereo_tick(deloop_track_t *track, float *lin, float *rin,
                               size_t cnt);
