@@ -3,29 +3,25 @@
 use std::env;
 use std::path::PathBuf;
 
-fn main() {
+fn main() -> miette::Result<()> {
     pkg_config::Config::new().probe("jack").unwrap();
     println!("cargo:rerun-if-changed=build.rs");
 
-    let bindings = bindgen::Builder::default()
-        .clang_arg("-Isrc")
-        .header("src/deloop/track.h")
-        .header("src/deloop/client.h")
-        .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
-        .generate()
-        .expect("Unable to generate bindings");
+    let path = std::path::PathBuf::from("src"); // include path
+    // cxx_build::bridge("src/deloop/bridge.rs")
 
-    let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
-    bindings
-        .write_to_file(out_path.join("bindings.rs"))
-        .expect("Couldn't write bindings!");
+    let mut b = autocxx_build::Builder::new("src/main.rs", &[&path]).build()?;
 
-    cc::Build::new()
+    b.flag_if_supported("-std=c++20")
         .include("src")
-        .file("src/deloop/client.c")
-        .file("src/deloop/track.c")
-        .file("src/deloop/logging.c")
+        .file("src/deloop/client.cc")
+        // .file("src/deloop/track.cc")
+        // .file("src/deloop/logging.cc")
+        .std("c++11")
         .compile("deloop");
-    println!("cargo:rerun-if-changed=src/deloop.c");
+    println!("cargo:rerun-if-changed=src/deloop/bridge.rs");
+    println!("cargo:rerun-if-changed=src/deloop/client.cc");
     println!("cargo:rustc-link-lib=jack");
+
+    Ok(())
 }
