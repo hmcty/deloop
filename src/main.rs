@@ -16,7 +16,7 @@ struct Args {
 fn main() -> eframe::Result {
     env_logger::init(); // Log to stderr (if you run with `RUST_LOG=debug`).
 
-    let client = Client::new();
+    let _client = Client::new();
 
     // Sleep for a while, otherwise the program will exit immediately.
     std::thread::sleep(std::time::Duration::from_secs(15));

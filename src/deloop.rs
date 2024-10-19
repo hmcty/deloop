@@ -4,10 +4,10 @@ pub struct Track {
 }
 
 struct ClientState {
-    output_FL: jack::Port<jack::AudioOut>,
-    output_FR: jack::Port<jack::AudioOut>,
-    input_FL: jack::Port<jack::AudioIn>,
-    input_FR: jack::Port<jack::AudioIn>,
+    output_fl: jack::Port<jack::AudioOut>,
+    output_fr: jack::Port<jack::AudioOut>,
+    input_fl: jack::Port<jack::AudioIn>,
+    input_fr: jack::Port<jack::AudioIn>,
     control: jack::Port<jack::MidiIn>,
     tracks: Vec<Track>,
 }
@@ -19,26 +19,26 @@ struct ClientHandler {
 impl ClientHandler {
     
     fn from_jack_client(client: &jack::Client) -> Self {
-        let output_FL = client
-            .register_port("output_FL", jack::AudioOut::default())
+        let output_fl = client
+            .register_port("output_fl", jack::AudioOut::default())
             .unwrap();
-        let output_FR = client
-            .register_port("output_FR", jack::AudioOut::default())
+        let output_fr = client
+            .register_port("output_fr", jack::AudioOut::default())
             .unwrap();
-        let input_FL = client
-            .register_port("input_FL", jack::AudioIn::default())
+        let input_fl = client
+            .register_port("input_fl", jack::AudioIn::default())
             .unwrap();
-        let input_FR = client
-            .register_port("input_FR", jack::AudioIn::default())
+        let input_fr = client
+            .register_port("input_fr", jack::AudioIn::default())
             .unwrap();
         let control = client
             .register_port("control", jack::MidiIn::default())
             .unwrap();
         let state = Arc::new(ClientState {
-            output_FL,
-            output_FR,
-            input_FL,
-            input_FR,
+            output_fl,
+            output_fr,
+            input_fl,
+            input_fr,
             control,
             tracks: Vec::new(),
         });
@@ -49,11 +49,11 @@ impl ClientHandler {
 
 impl jack::ProcessHandler for ClientHandler {
     
-    fn process(&mut self, _: &jack::Client, ps: &jack::ProcessScope) -> jack::Control {
+    fn process(&mut self, _: &jack::Client, _ps: &jack::ProcessScope) -> jack::Control {
         jack::Control::Continue
     }
 
-    fn buffer_size(&mut self, _: &jack::Client, len: jack::Frames) -> jack::Control {
+    fn buffer_size(&mut self, _: &jack::Client, _len: jack::Frames) -> jack::Control {
         jack::Control::Continue
     }
 
