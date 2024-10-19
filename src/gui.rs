@@ -11,7 +11,7 @@ pub fn run() -> eframe::Result {
     eframe::run_native(
         "Plot",
         options,
-        Box::new(|cc| Ok(Box::new(LoopDeLoopControlPanel::new(cc)))),
+        Box::new(|cc| Ok(Box::new(DeloopControlPanel::new(cc)))),
     )
     .unwrap();
     Ok(())
@@ -114,7 +114,7 @@ impl TrackInterface {
 }
 
 #[derive(Serialize, Deserialize)]
-struct LoopDeLoopControlPanel {
+struct DeloopControlPanel {
     audio_input_map: HashMap<String, deloop::AudioDevice>,
     audio_output_map: HashMap<String, deloop::AudioDevice>,
     output_device: String,
