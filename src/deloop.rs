@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::collections::HashSet;
 
 pub struct Track {
 }
@@ -60,7 +61,7 @@ impl jack::ProcessHandler for ClientHandler {
 }
 
 pub struct Client { 
-    jack_client: jack::AsyncClient<(), ClientHandler>,
+    jack_session: jack::AsyncClient<(), ClientHandler>,
     state: Arc<ClientState>,
 }
 
@@ -72,8 +73,54 @@ impl Client {
         let state = handler.state.clone();
 
         Client {
-            jack_client: jack_client.activate_async((), handler).unwrap(),
+            jack_session: jack_client.activate_async((), handler).unwrap(),
             state: state,
         }
+    }
+
+    fn get_clients_from_ports(&self, ports: Vec<String>) -> HashSet<String> {
+        let mut devices: HashSet<String> = HashSet::new();
+        for port in ports {
+            if let Some(device) = port.split(":").next() {
+                devices.insert(device.to_string());
+            }
+        }
+        return devices;
+    }
+
+    pub fn audio_sources(&self) -> HashSet<String> {
+        self.get_clients_from_ports(
+            self.jack_session
+                .as_client()
+                .ports(
+                    None,
+                    Some(jack::jack_sys::FLOAT_MONO_AUDIO),
+                    jack::PortFlags::IS_OUTPUT,
+                )
+        )
+    }
+
+    pub fn audio_sinks(&self) -> HashSet<String> {
+        self.get_clients_from_ports(
+            self.jack_session
+                .as_client()
+                .ports(
+                    None,
+                    Some(jack::jack_sys::FLOAT_MONO_AUDIO),
+                    jack::PortFlags::IS_INPUT,
+                )
+        )
+    }
+
+    pub fn midi_sources(&self) -> HashSet<String> {
+        self.get_clients_from_ports(
+            self.jack_session
+                .as_client()
+                .ports(
+                    None,
+                    Some(jack::jack_sys::RAW_MIDI_TYPE),
+                    jack::PortFlags::IS_OUTPUT,
+                )
+        )
     }
 }

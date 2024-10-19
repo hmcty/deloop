@@ -1,6 +1,6 @@
 use clap::Parser;
 
-mod deloop;
+pub mod deloop;
 mod util;
 
 use deloop::Client;
@@ -16,10 +16,28 @@ struct Args {
 fn main() -> eframe::Result {
     env_logger::init(); // Log to stderr (if you run with `RUST_LOG=debug`).
 
-    let _client = Client::new();
+    let client = Client::new();
+
+    let devices = client.audio_sources();
+    println!("AUDIO SOURCES");
+    for device in devices {
+        println!("{device}");
+    }
+
+    let devices = client.audio_sinks();
+    println!("AUDIO SINKS");
+    for device in devices {
+        println!("{device}");
+    }
+
+    let devices = client.midi_sources();
+    println!("MIDI SOURCES");
+    for device in devices {
+        println!("{device}");
+    }
 
     // Sleep for a while, otherwise the program will exit immediately.
-    std::thread::sleep(std::time::Duration::from_secs(15));
+    // std::thread::sleep(std::time::Duration::from_secs(15));
 
     Ok(())
 }
