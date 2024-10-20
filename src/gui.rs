@@ -1,7 +1,7 @@
 use eframe::egui::{self, ComboBox, Event};
 use egui::{containers::Frame, emath, epaint, epaint::PathStroke, pos2, vec2, Color32, Pos2, Rect};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::deloop;
 use crate::util;
@@ -35,35 +35,33 @@ fn create_wave_shape(
 }
 
 struct TrackInterface {
-    track: deloop::Track,
-    amp_rbuffer: Vec<f32>,
-    amp_wbuffer: Vec<f32>,
+    //track: deloop::Track,
+    //amp_rbuffer: Vec<f32>,
+    //amp_wbuffer: Vec<f32>,
 }
 
 impl TrackInterface {
     fn new() -> TrackInterface {
-        TrackInterface {
-            track: deloop::Track::new(),
-            amp_rbuffer: Vec::new(),
-            amp_wbuffer: Vec::new(),
-        }
+        TrackInterface {}
     }
 
     fn show(&mut self, ui: &mut egui::Ui) {
-        let is_focused = self.track.is_focused();
+        // let is_focused = self.track.is_focused();
 
         ui.separator();
 
         egui::Frame::none()
-            .fill(if is_focused {
-                egui::Color32::from_rgb(64, 64, 64)
-            } else {
-                egui::Color32::from_rgb(0x2a, 0x2a, 0x2a)
-            })
+            .fill(
+                //if is_focused {
+                //    egui::Color32::from_rgb(64, 64, 64)
+                // } else {
+                egui::Color32::from_rgb(0x2a, 0x2a, 0x2a),
+            )
+            // })
             .show(ui, |ui| {
                 // Write track and id
-                ui.label(format!("Track {}", self.track.id));
-                let mut progress: f32 = self.track.get_progress();
+                //    ui.label(format!("Track {}", self.track.id));
+                //    let mut progress: f32 = self.track.get_progress();
 
                 Frame::canvas(ui.style()).show(ui, |ui| {
                     let desired_size = ui.available_width() * vec2(1.0, 0.35);
@@ -73,174 +71,164 @@ impl TrackInterface {
                         Rect::from_x_y_ranges(0.0..=1.0, -1.0..=1.0),
                         rect,
                     );
-                    if self.track.is_awaiting() {
-                        self.amp_rbuffer.clear();
-                        self.amp_wbuffer.clear();
-                        return;
-                    }
 
-                    let mut shapes = vec![];
-                    let ramp = self.track.get_write_amplitude().clamp(-1.0, 1.0);
-                    let wamp = self.track.get_write_amplitude().clamp(-1.0, 1.0);
+                    // if self.track.is_awaiting() {
+                    //     self.amp_rbuffer.clear();
+                    //     self.amp_wbuffer.clear();
+                    //     return;
+                    // }
 
-                    shapes.push(create_wave_shape(
-                        &self.amp_rbuffer,
-                        to_screen,
-                        2.5,
-                        Color32::from_rgb(125, 125, 125),
-                    ));
-                    if self.track.is_recording() {
-                        self.amp_rbuffer.push(wamp);
-                        progress = 1.0;
-                    } else {
-                        let idx = (progress * (self.amp_rbuffer.len() as f32)) as usize;
-                        if let Some(x) = self.amp_rbuffer.get_mut(idx) {
-                            *x = ramp;
-                        }
-                    }
+                    // let mut shapes = vec![];
+                    // let ramp = self.track.get_write_amplitude().clamp(-1.0, 1.0);
+                    // let wamp = self.track.get_write_amplitude().clamp(-1.0, 1.0);
 
-                    let indicator_top = to_screen * pos2(progress, 1.0);
-                    let indicator_bottom = to_screen * pos2(progress, -1.0);
+                    // shapes.push(create_wave_shape(
+                    //     &self.amp_rbuffer,
+                    //     to_screen,
+                    //     2.5,
+                    //     Color32::from_rgb(125, 125, 125),
+                    // ));
+                    // if self.track.is_recording() {
+                    //     self.amp_rbuffer.push(wamp);
+                    //     progress = 1.0;
+                    // } else {
+                    //     let idx = (progress * (self.amp_rbuffer.len() as f32)) as usize;
+                    //     if let Some(x) = self.amp_rbuffer.get_mut(idx) {
+                    //         *x = ramp;
+                    //     }
+                    // }
 
-                    shapes.push(epaint::Shape::line(
-                        vec![indicator_top, indicator_bottom],
-                        PathStroke::new(1.0, Color32::from_rgb(125, 10, 10)),
-                    ));
+                    // let indicator_top = to_screen * pos2(progress, 1.0);
+                    // let indicator_bottom = to_screen * pos2(progress, -1.0);
 
-                    ui.painter().extend(shapes);
+                    // shapes.push(epaint::Shape::line(
+                    //     vec![indicator_top, indicator_bottom],
+                    //     PathStroke::new(1.0, Color32::from_rgb(125, 10, 10)),
+                    // ));
+
+                    // ui.painter().extend(shapes);
                 });
             });
     }
 }
 
-#[derive(Serialize, Deserialize)]
+// #[derive(Serialize, Deserialize)]
 struct DeloopControlPanel {
-    audio_input_map: HashMap<String, deloop::AudioDevice>,
-    audio_output_map: HashMap<String, deloop::AudioDevice>,
-    output_device: String,
-    midi_control_map: HashMap<String, deloop::MidiDevice>,
-    control_device: String,
+    client: deloop::Client,
 
-    #[serde(skip)]
+    audio_sources: HashSet<String>,
+    audio_sinks: HashSet<String>,
+    midi_sources: HashSet<String>,
+
+    selected_audio_sources: HashSet<String>,
+    selected_audio_sink: Option<String>,
+    selected_control_source: Option<String>,
+
+    // #[serde(skip)]
     tracks: Vec<TrackInterface>,
 }
 
-impl LoopDeLoopControlPanel {
+impl DeloopControlPanel {
     fn new(cc: &eframe::CreationContext<'_>) -> Self {
         let mut control_panel = Self::default();
-        if let Some(storage) = cc.storage {
-            if let Some(s) = storage.get_string("control_panel") {
-                let stored_control_panel: LoopDeLoopControlPanel =
-                    serde_json::from_str(&s).unwrap();
+        //if let Some(storage) = cc.storage {
+        //    if let Some(s) = storage.get_string("control_panel") {
+        //        let stored_control_panel: DeloopControlPanel =
+        //            serde_json::from_str(&s).unwrap();
 
-                for (k, device) in stored_control_panel.audio_input_map {
-                    if control_panel.audio_input_map.contains_key(&k) && device.is_selected {
-                        device.configure_as_input(true);
-                        control_panel
-                            .audio_input_map
-                            .get_mut(&k)
-                            .unwrap()
-                            .is_selected = true;
-                    }
-                }
+        //        for audio_source in stored_control_panel.selected_audio_sources {
+        //            // control_panel.client.connect(audio_source)
+        //        }
 
-                let output_device = control_panel
-                    .audio_output_map
-                    .get(&stored_control_panel.output_device);
-                if let Some(output_device) = output_device {
-                    output_device.configure_as_output();
-                    control_panel.output_device = stored_control_panel.output_device;
-                }
-
-                let control_device = control_panel
-                    .midi_control_map
-                    .get(&stored_control_panel.control_device);
-                if let Some(control_device) = control_device {
-                    control_device.configure_as_control();
-                    control_panel.control_device = stored_control_panel.control_device;
-                }
-            }
-        }
+        //        // client.connect(select_audio_sink)
+        //        // client.connect(select_midi_source)
+        //    }
+        //}
 
         control_panel
     }
 
     fn default() -> Self {
-        let mut audio_input_map = HashMap::new();
-        deloop::get_track_audio_opts(&mut audio_input_map, false);
-
-        let mut audio_output_map = HashMap::new();
-        deloop::get_track_audio_opts(&mut audio_output_map, true);
-
-        let mut midi_control_map = HashMap::new();
-        deloop::get_track_midi_opts(&mut midi_control_map);
-
-        let tracks = vec![TrackInterface::new()];
+        let client = deloop::Client::new();
+        let audio_sources = client.audio_sources();
+        let audio_sinks = client.audio_sinks();
+        let midi_sources = client.midi_sources();
 
         Self {
-            audio_input_map,
-            audio_output_map,
-            output_device: "None".to_string(),
-            midi_control_map,
-            control_device: "None".to_string(),
-            tracks,
+            client,
+            audio_sources,
+            audio_sinks,
+            midi_sources,
+            selected_audio_sources: HashSet::new(),
+            selected_audio_sink: None,
+            selected_control_source: None,
+            tracks: vec![TrackInterface::new()],
         }
     }
 }
 
-impl eframe::App for LoopDeLoopControlPanel {
+impl eframe::App for DeloopControlPanel {
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
-        let j = serde_json::to_string(&self).unwrap();
-        storage.set_string("control_panel", j);
+        // let j = serde_json::to_string(&self).unwrap();
+        // storage.set_string("control_panel", j);
     }
 
     fn update(&mut self, ctx: &egui::Context, _: &mut eframe::Frame) {
         ctx.request_repaint(); // Run continuously
 
         egui::SidePanel::left("").show(ctx, |ui| {
-            ui.label("Input Devices");
-            for (client, device) in &mut self.audio_input_map {
-                if ui.checkbox(&mut device.is_selected, client).clicked() {
-                    device.configure_as_input(device.is_selected);
+            ui.label("Audio Sources");
+            for audio_source in &self.audio_sources {
+                let mut selected = self.selected_audio_sources.contains(audio_source);
+                if ui.checkbox(&mut selected, audio_source.clone()).clicked() {
+                    if self.selected_audio_sources.contains(audio_source) {
+                        self.selected_audio_sources.remove(&audio_source.clone());
+                    } else {
+                        self.selected_audio_sources.insert(audio_source.clone());
+                    }
                 }
             }
 
             ui.separator();
-            ComboBox::from_label("Output Device")
-                .selected_text(util::truncate_string(&self.output_device, 15))
+            ComboBox::from_label("Audio Sink")
+                .selected_text(util::truncate_string(
+                    &self
+                        .selected_audio_sink
+                        .clone()
+                        .unwrap_or("None".to_string()),
+                    15,
+                ))
                 .show_ui(ui, |ui| {
-                    for (client, device) in &self.audio_output_map {
+                    for audio_sink in &self.audio_sinks {
                         let value = ui.selectable_value(
-                            &mut self.output_device,
-                            client.to_string(),
-                            client,
+                            &mut self.selected_audio_sink,
+                            Some(audio_sink.to_string()),
+                            audio_sink,
                         );
-                        if value.clicked() {
-                            device.configure_as_output();
-                        }
+                        if value.clicked() {}
                     }
                 });
 
-            ComboBox::from_label("Control Device")
-                .selected_text(util::truncate_string(&self.control_device, 15))
+            ComboBox::from_label("Control Source")
+                .selected_text(util::truncate_string(
+                    &self
+                        .selected_control_source
+                        .clone()
+                        .unwrap_or("None".to_string()),
+                    15,
+                ))
                 .show_ui(ui, |ui| {
-                    for (client, device) in &self.midi_control_map {
+                    for midi_source in &self.midi_sources {
                         let value = ui.selectable_value(
-                            &mut self.control_device,
-                            client.to_string(),
-                            client,
+                            &mut self.selected_control_source,
+                            Some(midi_source.to_string()),
+                            midi_source,
                         );
-                        if value.clicked() {
-                            device.configure_as_control();
-                        }
+                        if value.clicked() {}
                     }
                 });
 
-            if ui.button("Update Devices").clicked() {
-                deloop::get_track_audio_opts(&mut self.audio_input_map, false);
-                deloop::get_track_audio_opts(&mut self.audio_output_map, true);
-                deloop::get_track_midi_opts(&mut self.midi_control_map);
-            }
+            if ui.button("Refresh").clicked() {}
         });
 
         egui::CentralPanel::default().show(ctx, |ui| {
@@ -263,15 +251,15 @@ impl eframe::App for LoopDeLoopControlPanel {
                     } = event
                     {
                         if *pressed {
-                            match key {
-                                egui::Key::Space => deloop::client_perform_action(),
-                                egui::Key::Num0 => deloop::client_set_focused_track(0),
-                                egui::Key::Num1 => deloop::client_set_focused_track(1),
-                                egui::Key::Num2 => deloop::client_set_focused_track(2),
-                                egui::Key::Num3 => deloop::client_set_focused_track(3),
-                                egui::Key::Num4 => deloop::client_set_focused_track(4),
-                                _ => {}
-                            }
+                            // match key {
+                            // egui::Key::Space => deloop::client_perform_action(),
+                            // egui::Key::Num0 => deloop::client_set_focused_track(0),
+                            // egui::Key::Num1 => deloop::client_set_focused_track(1),
+                            // egui::Key::Num2 => deloop::client_set_focused_track(2),
+                            // egui::Key::Num3 => deloop::client_set_focused_track(3),
+                            // egui::Key::Num4 => deloop::client_set_focused_track(4),
+                            // _ => {}
+                            //  }
                         }
                     }
                 }

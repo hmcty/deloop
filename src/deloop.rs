@@ -1,8 +1,7 @@
-use std::sync::Arc;
 use std::collections::HashSet;
+use std::sync::Arc;
 
-pub struct Track {
-}
+pub struct Track {}
 
 struct ClientState {
     output_fl: jack::Port<jack::AudioOut>,
@@ -18,7 +17,6 @@ struct ClientHandler {
 }
 
 impl ClientHandler {
-    
     fn from_jack_client(client: &jack::Client) -> Self {
         let output_fl = client
             .register_port("output_fl", jack::AudioOut::default())
@@ -49,7 +47,6 @@ impl ClientHandler {
 }
 
 impl jack::ProcessHandler for ClientHandler {
-    
     fn process(&mut self, _: &jack::Client, _ps: &jack::ProcessScope) -> jack::Control {
         jack::Control::Continue
     }
@@ -57,10 +54,9 @@ impl jack::ProcessHandler for ClientHandler {
     fn buffer_size(&mut self, _: &jack::Client, _len: jack::Frames) -> jack::Control {
         jack::Control::Continue
     }
-
 }
 
-pub struct Client { 
+pub struct Client {
     jack_session: jack::AsyncClient<(), ClientHandler>,
     state: Arc<ClientState>,
 }
@@ -85,42 +81,31 @@ impl Client {
                 devices.insert(device.to_string());
             }
         }
-        return devices;
+
+        devices
     }
 
     pub fn audio_sources(&self) -> HashSet<String> {
-        self.get_clients_from_ports(
-            self.jack_session
-                .as_client()
-                .ports(
-                    None,
-                    Some(jack::jack_sys::FLOAT_MONO_AUDIO),
-                    jack::PortFlags::IS_OUTPUT,
-                )
-        )
+        self.get_clients_from_ports(self.jack_session.as_client().ports(
+            None,
+            Some(jack::jack_sys::FLOAT_MONO_AUDIO),
+            jack::PortFlags::IS_OUTPUT,
+        ))
     }
 
     pub fn audio_sinks(&self) -> HashSet<String> {
-        self.get_clients_from_ports(
-            self.jack_session
-                .as_client()
-                .ports(
-                    None,
-                    Some(jack::jack_sys::FLOAT_MONO_AUDIO),
-                    jack::PortFlags::IS_INPUT,
-                )
-        )
+        self.get_clients_from_ports(self.jack_session.as_client().ports(
+            None,
+            Some(jack::jack_sys::FLOAT_MONO_AUDIO),
+            jack::PortFlags::IS_INPUT,
+        ))
     }
 
     pub fn midi_sources(&self) -> HashSet<String> {
-        self.get_clients_from_ports(
-            self.jack_session
-                .as_client()
-                .ports(
-                    None,
-                    Some(jack::jack_sys::RAW_MIDI_TYPE),
-                    jack::PortFlags::IS_OUTPUT,
-                )
-        )
+        self.get_clients_from_ports(self.jack_session.as_client().ports(
+            None,
+            Some(jack::jack_sys::RAW_MIDI_TYPE),
+            jack::PortFlags::IS_OUTPUT,
+        ))
     }
 }
