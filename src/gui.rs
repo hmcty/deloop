@@ -1,7 +1,8 @@
 use eframe::egui::{self, ComboBox, Event};
 use egui::{containers::Frame, emath, epaint, epaint::PathStroke, pos2, vec2, Color32, Pos2, Rect};
+use log::error;
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 use crate::deloop;
 use crate::util;
@@ -32,6 +33,13 @@ fn create_wave_shape(
         .collect();
 
     epaint::Shape::line(points, PathStroke::new(thickness, color))
+}
+
+fn log_if_err<T>(result: Result<T, deloop::Error>) -> Result<T, deloop::Error> {
+    if let Err(e) = result {
+        error!("{}", e);
+    }
+    result
 }
 
 struct TrackInterface {
@@ -112,8 +120,9 @@ impl TrackInterface {
     }
 }
 
-// #[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
 struct DeloopControlPanel {
+    #[serde(skip)]
     client: deloop::Client,
 
     audio_sources: HashSet<String>,
@@ -124,26 +133,25 @@ struct DeloopControlPanel {
     selected_audio_sink: Option<String>,
     selected_control_source: Option<String>,
 
-    // #[serde(skip)]
+    #[serde(skip)]
     tracks: Vec<TrackInterface>,
 }
 
 impl DeloopControlPanel {
     fn new(cc: &eframe::CreationContext<'_>) -> Self {
         let mut control_panel = Self::default();
-        //if let Some(storage) = cc.storage {
-        //    if let Some(s) = storage.get_string("control_panel") {
-        //        let stored_control_panel: DeloopControlPanel =
-        //            serde_json::from_str(&s).unwrap();
+        if let Some(storage) = cc.storage {
+            if let Some(s) = storage.get_string("control_panel") {
+                let stored_control_panel: DeloopControlPanel = serde_json::from_str(&s).unwrap();
 
-        //        for audio_source in stored_control_panel.selected_audio_sources {
-        //            // control_panel.client.connect(audio_source)
-        //        }
+                for audio_source in stored_control_panel.selected_audio_sources {
+                    control_panel.toggle_subscription_to_audio_source(audio_source);
+                }
 
-        //        // client.connect(select_audio_sink)
-        //        // client.connect(select_midi_source)
-        //    }
-        //}
+                // client.connect(select_audio_sink)
+                // client.connect(select_midi_source)
+            }
+        }
 
         control_panel
     }
@@ -165,12 +173,34 @@ impl DeloopControlPanel {
             tracks: vec![TrackInterface::new()],
         }
     }
+
+    fn toggle_subscription_to_audio_source(&mut self, audio_source: String) {
+        if self.selected_audio_sources.contains(&audio_source) {
+            log_if_err(self.client.unsubscribe_from(audio_source.clone())).ok_then(|_| {
+                self.selected_audio_sources.remove(&audio_source);
+            });
+        } else {
+            log_if_err(self.client.subscribe_to(audio_source.clone())).ok_then(|_| {
+                self.selected_audio_sources.insert(audio_source);
+            });
+        }
+    }
+
+    fn select_audio_sink(&mut self, audio_sink: Option<String>) {
+        log_if_err(self.client.stop_publishing());
+        if let Some(selected_sink) = audio_sink.clone() {
+            log_if_err(self.client.publish_to(selected_sink)).ok_or(|_| {
+                log_if_err(self.client.stop_publishing());
+                self.selected_audio_sink = None;
+            });
+        }
+    }
 }
 
 impl eframe::App for DeloopControlPanel {
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
-        // let j = serde_json::to_string(&self).unwrap();
-        // storage.set_string("control_panel", j);
+        let j = serde_json::to_string(&self).unwrap();
+        storage.set_string("control_panel", j);
     }
 
     fn update(&mut self, ctx: &egui::Context, _: &mut eframe::Frame) {
@@ -181,11 +211,7 @@ impl eframe::App for DeloopControlPanel {
             for audio_source in &self.audio_sources {
                 let mut selected = self.selected_audio_sources.contains(audio_source);
                 if ui.checkbox(&mut selected, audio_source.clone()).clicked() {
-                    if self.selected_audio_sources.contains(audio_source) {
-                        self.selected_audio_sources.remove(&audio_source.clone());
-                    } else {
-                        self.selected_audio_sources.insert(audio_source.clone());
-                    }
+                    self.toggle_subscription_to_audio_source(audio_source.clone());
                 }
             }
 
@@ -199,13 +225,22 @@ impl eframe::App for DeloopControlPanel {
                     15,
                 ))
                 .show_ui(ui, |ui| {
+                    if ui
+                        .selectable_value(&mut self.selected_audio_sink, None, "None")
+                        .clicked()
+                    {
+                        self.select_audio_sink(None);
+                    }
+
                     for audio_sink in &self.audio_sinks {
                         let value = ui.selectable_value(
                             &mut self.selected_audio_sink,
                             Some(audio_sink.to_string()),
                             audio_sink,
                         );
-                        if value.clicked() {}
+                        if value.clicked() {
+                            self.select_audio_sink(Some(audio_sink.clone()));
+                        }
                     }
                 });
 
