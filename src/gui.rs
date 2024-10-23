@@ -18,6 +18,7 @@ pub fn run() -> eframe::Result {
     Ok(())
 }
 
+#[allow(dead_code)]
 fn create_wave_shape(
     buffer: &[f32],
     to_screen: emath::RectTransform,
@@ -35,11 +36,15 @@ fn create_wave_shape(
     epaint::Shape::line(points, PathStroke::new(thickness, color))
 }
 
-fn log_if_err<T>(result: Result<T, deloop::Error>) -> Result<T, deloop::Error> {
-    if let Err(e) = result {
-        error!("{}", e);
+fn log_on_err<T>(result: Result<T, deloop::Error>) -> Result<T, deloop::Error> {
+    match result {
+        Ok(t) => Ok(t),
+        Err(e) => {
+            // TODO(hmcty): Use modal dialog
+            error!("{}", e);
+            Err(e)
+        }
     }
-    result
 }
 
 struct TrackInterface {
@@ -75,7 +80,7 @@ impl TrackInterface {
                     let desired_size = ui.available_width() * vec2(1.0, 0.35);
                     let (_id, rect) = ui.allocate_space(desired_size);
 
-                    let to_screen = emath::RectTransform::from_to(
+                    let _to_screen = emath::RectTransform::from_to(
                         Rect::from_x_y_ranges(0.0..=1.0, -1.0..=1.0),
                         rect,
                     );
@@ -145,7 +150,7 @@ impl DeloopControlPanel {
                 let stored_control_panel: DeloopControlPanel = serde_json::from_str(&s).unwrap();
 
                 for audio_source in stored_control_panel.selected_audio_sources {
-                    control_panel.toggle_subscription_to_audio_source(audio_source);
+                    control_panel.toggle_subscription_to_audio_source(audio_source.as_str());
                 }
 
                 // client.connect(select_audio_sink)
@@ -174,25 +179,28 @@ impl DeloopControlPanel {
         }
     }
 
-    fn toggle_subscription_to_audio_source(&mut self, audio_source: String) {
-        if self.selected_audio_sources.contains(&audio_source) {
-            log_if_err(self.client.unsubscribe_from(audio_source.clone())).ok_then(|_| {
-                self.selected_audio_sources.remove(&audio_source);
-            });
-        } else {
-            log_if_err(self.client.subscribe_to(audio_source.clone())).ok_then(|_| {
-                self.selected_audio_sources.insert(audio_source);
-            });
+    fn toggle_subscription_to_audio_source(&mut self, audio_source: &str) {
+        if self.selected_audio_sources.contains(audio_source) {
+            if log_on_err(self.client.unsubscribe_from(audio_source)).is_ok() {
+                self.selected_audio_sources.remove(audio_source);
+            }
+        } else if log_on_err(self.client.subscribe_to(audio_source)).is_ok() {
+            self.selected_audio_sources.insert(audio_source.to_string());
         }
     }
 
     fn select_audio_sink(&mut self, audio_sink: Option<String>) {
-        log_if_err(self.client.stop_publishing());
-        if let Some(selected_sink) = audio_sink.clone() {
-            log_if_err(self.client.publish_to(selected_sink)).ok_or(|_| {
-                log_if_err(self.client.stop_publishing());
+        if self.selected_audio_sink == audio_sink {
+            return;
+        }
+
+        if log_on_err(self.client.stop_publishing()).is_err() {
+            self.selected_audio_sink = None;
+        } else if let Some(selected_sink) = audio_sink {
+            if log_on_err(self.client.publish_to(selected_sink.as_str())).is_err() {
                 self.selected_audio_sink = None;
-            });
+                let _ = log_on_err(self.client.stop_publishing());
+            }
         }
     }
 }
@@ -208,11 +216,16 @@ impl eframe::App for DeloopControlPanel {
 
         egui::SidePanel::left("").show(ctx, |ui| {
             ui.label("Audio Sources");
+            let mut freshly_selected = Vec::new();
             for audio_source in &self.audio_sources {
                 let mut selected = self.selected_audio_sources.contains(audio_source);
                 if ui.checkbox(&mut selected, audio_source.clone()).clicked() {
-                    self.toggle_subscription_to_audio_source(audio_source.clone());
+                    freshly_selected.push(audio_source.clone());
                 }
+            }
+
+            for audio_source in freshly_selected {
+                self.toggle_subscription_to_audio_source(audio_source.as_str());
             }
 
             ui.separator();
@@ -232,15 +245,17 @@ impl eframe::App for DeloopControlPanel {
                         self.select_audio_sink(None);
                     }
 
+                    let mut selected_audio_sink = self.selected_audio_sink.clone();
                     for audio_sink in &self.audio_sinks {
-                        let value = ui.selectable_value(
-                            &mut self.selected_audio_sink,
-                            Some(audio_sink.to_string()),
+                        ui.selectable_value(
+                            &mut selected_audio_sink,
+                            Some(audio_sink.clone()),
                             audio_sink,
                         );
-                        if value.clicked() {
-                            self.select_audio_sink(Some(audio_sink.clone()));
-                        }
+                    }
+
+                    if let Some(selected_audio_sink) = selected_audio_sink {
+                        self.select_audio_sink(Some(selected_audio_sink));
                     }
                 });
 
@@ -278,7 +293,7 @@ impl eframe::App for DeloopControlPanel {
             ui.input(|i| {
                 for event in &i.raw.events {
                     if let Event::Key {
-                        key,
+                        key: _,
                         physical_key: _,
                         pressed,
                         repeat: _,
