@@ -144,21 +144,22 @@ struct DeloopControlPanel {
 
 impl DeloopControlPanel {
     fn new(cc: &eframe::CreationContext<'_>) -> Self {
-        let mut control_panel = Self::default();
         if let Some(storage) = cc.storage {
             if let Some(s) = storage.get_string("control_panel") {
-                let stored_control_panel: DeloopControlPanel = serde_json::from_str(&s).unwrap();
+                let control_panel = serde_json::from_str::<DeloopControlPanel>(&s);
+                if let Ok(control_panel) = control_panel {
+                    //for audio_source in &control_panel.selected_audio_sources {
+                    //    control_panel.toggle_subscription_to_audio_source(audio_source.as_str());
+                    //}
 
-                for audio_source in stored_control_panel.selected_audio_sources {
-                    control_panel.toggle_subscription_to_audio_source(audio_source.as_str());
+                    return control_panel;
                 }
-
                 // client.connect(select_audio_sink)
                 // client.connect(select_midi_source)
             }
         }
 
-        control_panel
+        Self::default()
     }
 
     fn default() -> Self {
