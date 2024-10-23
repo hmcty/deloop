@@ -31,7 +31,11 @@ struct ClientState {
     output_fr: jack::Port<jack::AudioOut>,
     input_fl: jack::Port<jack::AudioIn>,
     input_fr: jack::Port<jack::AudioIn>,
+
+    #[allow(dead_code)]
     control: jack::Port<jack::MidiIn>,
+
+    #[allow(dead_code)]
     tracks: Vec<Track>,
 }
 
@@ -87,11 +91,10 @@ impl jack::ProcessHandler for ClientHandler {
 }
 
 #[derive(Debug)]
-struct LabeledPorts {
+pub struct LabeledPorts {
     fl: Option<String>,
     fr: Option<String>,
     mono: Option<String>,
-    unknown: Vec<String>,
 }
 
 impl LabeledPorts {
@@ -100,22 +103,16 @@ impl LabeledPorts {
         let mut fl = None;
         let mut fr = None;
         let mut mono = None;
-        let mut unknown = Vec::new();
         for port_name in port_names {
             match port_name.as_str() {
                 _ if port_name.ends_with("_FL") => fl = Some(port_name),
                 _ if port_name.ends_with("_FR") => fr = Some(port_name),
                 _ if port_name.ends_with("_MONO") => mono = Some(port_name),
-                _ => unknown.push(port_name),
+                _ => {}
             }
         }
 
-        LabeledPorts {
-            fl,
-            fr,
-            mono,
-            unknown,
-        }
+        LabeledPorts { fl, fr, mono }
     }
 }
 
@@ -125,6 +122,12 @@ impl LabeledPorts {
 pub struct Client {
     jack_session: jack::AsyncClient<(), ClientHandler>,
     state: Arc<ClientState>,
+}
+
+impl Default for Client {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Client {
@@ -186,12 +189,12 @@ impl Client {
         let labeled_ports = LabeledPorts::from_ports_names(port_names);
         if let (Some(fl), Some(fr)) = (&labeled_ports.fl, &labeled_ports.fr) {
             info!("Subscribing to '{} [STEREO]'", source_name);
-            self.subscribe_port_to(&self.state.input_fl, &fl)?;
-            self.subscribe_port_to(&self.state.input_fr, &fr)?;
+            self.subscribe_port_to(&self.state.input_fl, fl)?;
+            self.subscribe_port_to(&self.state.input_fr, fr)?;
         } else if let Some(mono) = &labeled_ports.mono {
             info!("Subscribing to '{} [MONO]'", source_name);
-            self.subscribe_port_to(&self.state.input_fl, &mono)?;
-            self.subscribe_port_to(&self.state.input_fr, &mono)?;
+            self.subscribe_port_to(&self.state.input_fl, mono)?;
+            self.subscribe_port_to(&self.state.input_fr, mono)?;
         } else {
             return UnexpectedPortFormatSnafu {
                 client_name: source_name.to_string(),
@@ -205,8 +208,6 @@ impl Client {
 
     /// Stops reading audio/MIDI data from the specified source.
     pub fn unsubscribe_from(&mut self, source_name: &str) -> Result<(), Error> {
-        let jack_client = self.jack_session.as_client();
-
         for port in self.state.input_fl.get_connections() {
             if port.starts_with(source_name) {
                 self.unsubscribe_port_from(&self.state.input_fl, &port)?;
@@ -232,12 +233,12 @@ impl Client {
         let labeled_ports = LabeledPorts::from_ports_names(port_names);
         if let (Some(fl), Some(fr)) = (&labeled_ports.fl, &labeled_ports.fr) {
             info!("Publishing at '{} [STEREO]'", sink_name);
-            self.publish_port_at(&self.state.output_fl, &fl)?;
-            self.publish_port_at(&self.state.output_fr, &fr)?;
+            self.publish_port_at(&self.state.output_fl, fl)?;
+            self.publish_port_at(&self.state.output_fr, fr)?;
         } else if let Some(mono) = &labeled_ports.mono {
             info!("Publishing at '{} [MONO]'", sink_name);
-            self.publish_port_at(&self.state.output_fl, &mono)?;
-            self.publish_port_at(&self.state.output_fr, &mono)?;
+            self.publish_port_at(&self.state.output_fl, mono)?;
+            self.publish_port_at(&self.state.output_fr, mono)?;
         } else {
             return UnexpectedPortFormatSnafu {
                 client_name: sink_name.to_string(),
@@ -251,8 +252,6 @@ impl Client {
 
     /// Ends any outgoing audio streams.
     pub fn stop_publishing(&mut self) -> Result<(), Error> {
-        let jack_client = self.jack_session.as_client();
-
         for port in self.state.output_fl.get_connections() {
             self.stop_publishing_port_at(&self.state.output_fl, &port)?;
         }
@@ -331,7 +330,7 @@ impl Client {
 
         let jack_client = self.jack_session.as_client();
         jack_client
-            .connect_ports(&source_port, &dest_port)
+            .connect_ports(source_port, dest_port)
             .context(JackSnafu {
                 msg: "Failed to connnect to port",
             })?;
@@ -392,7 +391,7 @@ impl Client {
 
         let jack_client = self.jack_session.as_client();
         jack_client
-            .disconnect_ports(&source_port, &dest_port)
+            .disconnect_ports(source_port, dest_port)
             .context(JackSnafu {
                 msg: "Failed to disconnect port",
             })?;
