@@ -1,6 +1,6 @@
 use eframe::egui::{self, ComboBox, Event};
 use egui::{containers::Frame, emath, epaint, epaint::PathStroke, pos2, vec2, Color32, Pos2, Rect};
-use log::error;
+use log::{error, info};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
@@ -12,7 +12,7 @@ pub fn run() -> eframe::Result {
     eframe::run_native(
         "Plot",
         options,
-        Box::new(|cc| Ok(Box::new(DeloopControlPanel::new(cc)))),
+        Box::new(|cc| Ok(Box::new(ControlPanel::new(cc)))),
     )
     .unwrap();
     Ok(())
@@ -125,41 +125,122 @@ impl TrackInterface {
     }
 }
 
-#[derive(Serialize, Deserialize)]
-struct DeloopControlPanel {
-    #[serde(skip)]
-    client: deloop::Client,
+#[derive(Serialize, Deserialize, Default)]
+struct SelectedIO {
+    audio_sources: HashSet<String>,
+    audio_sink: Option<String>,
+    control_source: Option<String>,
+}
 
+impl SelectedIO {
+    fn toggle_audio_source(&mut self, client: &mut deloop::Client, audio_source: &str) {
+        info!(
+            "User toggled subscription to audio source: {:?}",
+            audio_source
+        );
+        if self.audio_sources.contains(audio_source) {
+            if log_on_err(client.unsubscribe_from(audio_source)).is_ok() {
+                self.audio_sources.remove(audio_source);
+            }
+        } else if log_on_err(client.subscribe_to(audio_source)).is_ok() {
+            self.audio_sources.insert(audio_source.to_string());
+        }
+    }
+
+    fn select_audio_sink(&mut self, client: &mut deloop::Client, audio_sink: Option<String>) {
+        if self.audio_sink == audio_sink {
+            return;
+        }
+
+        info!("User selected audio sink: {:?}", audio_sink);
+        if log_on_err(client.stop_publishing()).is_err() {
+            self.audio_sink = None;
+        } else if let Some(selected_sink) = audio_sink {
+            if log_on_err(client.publish_to(selected_sink.as_str())).is_err() {
+                self.audio_sink = None;
+                let _ = log_on_err(client.stop_publishing());
+            } else {
+                self.audio_sink = Some(selected_sink);
+            }
+        }
+    }
+
+    fn select_control_source(
+        &mut self,
+        client: &mut deloop::Client,
+        control_source: Option<String>,
+    ) {
+        if self.control_source == control_source {
+            return;
+        }
+
+        info!("User selected control source: {:?}", control_source);
+        if let Some(control_source) = &self.control_source {
+            if log_on_err(client.unsubscribe_from(control_source)).is_err() {
+                return;
+            }
+
+            self.control_source = None;
+        }
+
+        if let Some(control_source) = control_source {
+            if log_on_err(client.subscribe_to(control_source.as_str())).is_err() {
+                return;
+            }
+
+            self.control_source = Some(control_source);
+        }
+    }
+}
+
+struct ControlPanel {
+    client: deloop::Client,
+    tracks: Vec<TrackInterface>,
     audio_sources: HashSet<String>,
     audio_sinks: HashSet<String>,
     midi_sources: HashSet<String>,
-
-    selected_audio_sources: HashSet<String>,
-    selected_audio_sink: Option<String>,
-    selected_control_source: Option<String>,
-
-    #[serde(skip)]
-    tracks: Vec<TrackInterface>,
+    selected_io: SelectedIO,
 }
 
-impl DeloopControlPanel {
+impl ControlPanel {
     fn new(cc: &eframe::CreationContext<'_>) -> Self {
-        if let Some(storage) = cc.storage {
-            if let Some(s) = storage.get_string("control_panel") {
-                let control_panel = serde_json::from_str::<DeloopControlPanel>(&s);
-                if let Ok(control_panel) = control_panel {
-                    //for audio_source in &control_panel.selected_audio_sources {
-                    //    control_panel.toggle_subscription_to_audio_source(audio_source.as_str());
-                    //}
+        let mut control_panel = ControlPanel::default();
 
-                    return control_panel;
+        let Some(storage) = cc.storage else {
+            info!("No storage found");
+            return control_panel;
+        };
+
+        let Some(json) = storage.get_string("selected_io") else {
+            info!("Selected IO not configured in storage");
+            return control_panel;
+        };
+
+        if let Ok(selected_io) = serde_json::from_str::<SelectedIO>(&json) {
+            for audio_source in &selected_io.audio_sources {
+                if !control_panel.audio_sources.contains(audio_source.as_str()) {
+                    continue;
                 }
-                // client.connect(select_audio_sink)
-                // client.connect(select_midi_source)
+
+                control_panel
+                    .selected_io
+                    .toggle_audio_source(&mut control_panel.client, audio_source.as_str());
+            }
+
+            if let Some(audio_sink) = selected_io.audio_sink {
+                control_panel
+                    .selected_io
+                    .select_audio_sink(&mut control_panel.client, Some(audio_sink));
+            }
+
+            if let Some(control_source) = selected_io.control_source {
+                control_panel
+                    .selected_io
+                    .select_control_source(&mut control_panel.client, Some(control_source));
             }
         }
 
-        Self::default()
+        control_panel
     }
 
     fn default() -> Self {
@@ -170,46 +251,19 @@ impl DeloopControlPanel {
 
         Self {
             client,
+            tracks: vec![TrackInterface::new()],
             audio_sources,
             audio_sinks,
             midi_sources,
-            selected_audio_sources: HashSet::new(),
-            selected_audio_sink: None,
-            selected_control_source: None,
-            tracks: vec![TrackInterface::new()],
-        }
-    }
-
-    fn toggle_subscription_to_audio_source(&mut self, audio_source: &str) {
-        if self.selected_audio_sources.contains(audio_source) {
-            if log_on_err(self.client.unsubscribe_from(audio_source)).is_ok() {
-                self.selected_audio_sources.remove(audio_source);
-            }
-        } else if log_on_err(self.client.subscribe_to(audio_source)).is_ok() {
-            self.selected_audio_sources.insert(audio_source.to_string());
-        }
-    }
-
-    fn select_audio_sink(&mut self, audio_sink: Option<String>) {
-        if self.selected_audio_sink == audio_sink {
-            return;
-        }
-
-        if log_on_err(self.client.stop_publishing()).is_err() {
-            self.selected_audio_sink = None;
-        } else if let Some(selected_sink) = audio_sink {
-            if log_on_err(self.client.publish_to(selected_sink.as_str())).is_err() {
-                self.selected_audio_sink = None;
-                let _ = log_on_err(self.client.stop_publishing());
-            }
+            selected_io: SelectedIO::default(),
         }
     }
 }
 
-impl eframe::App for DeloopControlPanel {
+impl eframe::App for ControlPanel {
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
-        let j = serde_json::to_string(&self).unwrap();
-        storage.set_string("control_panel", j);
+        let j = serde_json::to_string(&self.selected_io).unwrap();
+        storage.set_string("selected_io", j);
     }
 
     fn update(&mut self, ctx: &egui::Context, _: &mut eframe::Frame) {
@@ -217,69 +271,70 @@ impl eframe::App for DeloopControlPanel {
 
         egui::SidePanel::left("").show(ctx, |ui| {
             ui.label("Audio Sources");
-            let mut freshly_selected = Vec::new();
             for audio_source in &self.audio_sources {
-                let mut selected = self.selected_audio_sources.contains(audio_source);
+                let mut selected = self.selected_io.audio_sources.contains(audio_source);
                 if ui.checkbox(&mut selected, audio_source.clone()).clicked() {
-                    freshly_selected.push(audio_source.clone());
+                    self.selected_io
+                        .toggle_audio_source(&mut self.client, audio_source);
                 }
-            }
-
-            for audio_source in freshly_selected {
-                self.toggle_subscription_to_audio_source(audio_source.as_str());
             }
 
             ui.separator();
             ComboBox::from_label("Audio Sink")
                 .selected_text(util::truncate_string(
                     &self
-                        .selected_audio_sink
+                        .selected_io
+                        .audio_sink
                         .clone()
                         .unwrap_or("None".to_string()),
                     15,
                 ))
                 .show_ui(ui, |ui| {
-                    if ui
-                        .selectable_value(&mut self.selected_audio_sink, None, "None")
-                        .clicked()
-                    {
-                        self.select_audio_sink(None);
-                    }
-
-                    let mut selected_audio_sink = self.selected_audio_sink.clone();
+                    let mut selected_audio_sink = self.selected_io.audio_sink.clone();
+                    ui.selectable_value(&mut selected_audio_sink, None, "None");
                     for audio_sink in &self.audio_sinks {
-                        ui.selectable_value(
+                        let value = ui.selectable_value(
                             &mut selected_audio_sink,
                             Some(audio_sink.clone()),
                             audio_sink,
                         );
-                    }
-
-                    if let Some(selected_audio_sink) = selected_audio_sink {
-                        self.select_audio_sink(Some(selected_audio_sink));
+                        if value.clicked() {
+                            self.selected_io
+                                .select_audio_sink(&mut self.client, Some(audio_sink.clone()));
+                        }
                     }
                 });
 
             ComboBox::from_label("Control Source")
                 .selected_text(util::truncate_string(
                     &self
-                        .selected_control_source
+                        .selected_io
+                        .control_source
                         .clone()
                         .unwrap_or("None".to_string()),
                     15,
                 ))
                 .show_ui(ui, |ui| {
+                    let mut selected_control_source = self.selected_io.control_source.clone();
+                    ui.selectable_value(&mut selected_control_source, None, "None");
                     for midi_source in &self.midi_sources {
                         let value = ui.selectable_value(
-                            &mut self.selected_control_source,
-                            Some(midi_source.to_string()),
+                            &mut selected_control_source,
+                            Some(midi_source.clone()),
                             midi_source,
                         );
-                        if value.clicked() {}
+                        if value.clicked() {
+                            self.selected_io
+                                .select_control_source(&mut self.client, Some(midi_source.clone()));
+                        }
                     }
                 });
 
-            if ui.button("Refresh").clicked() {}
+            if ui.button("Refresh").clicked() {
+                self.audio_sources = self.client.audio_sources();
+                self.audio_sinks = self.client.audio_sinks();
+                self.midi_sources = self.client.midi_sources();
+            }
         });
 
         egui::CentralPanel::default().show(ctx, |ui| {

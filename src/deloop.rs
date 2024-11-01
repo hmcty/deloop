@@ -3,6 +3,8 @@ use snafu::prelude::*;
 use std::collections::HashSet;
 use std::sync::Arc;
 
+mod track;
+
 #[derive(Debug, Snafu)]
 pub enum Error {
     #[snafu(display("{msg}: {source}"))]
@@ -24,8 +26,6 @@ pub enum Error {
     },
 }
 
-pub struct Track {}
-
 struct ClientState {
     output_fl: jack::Port<jack::AudioOut>,
     output_fr: jack::Port<jack::AudioOut>,
@@ -36,7 +36,7 @@ struct ClientState {
     control: jack::Port<jack::MidiIn>,
 
     #[allow(dead_code)]
-    tracks: Vec<Track>,
+    tracks: Vec<track::TrackType>,
 }
 
 // Implementation of Jack processing callbacks.
@@ -99,15 +99,15 @@ pub struct LabeledPorts {
 
 impl LabeledPorts {
     // Identifies port types by name.
-    fn from_ports_names(port_names: Vec<String>) -> Self {
+    fn from_ports_names(port_names: &Vec<String>) -> Self {
         let mut fl = None;
         let mut fr = None;
         let mut mono = None;
         for port_name in port_names {
             match port_name.as_str() {
-                _ if port_name.ends_with("_FL") => fl = Some(port_name),
-                _ if port_name.ends_with("_FR") => fr = Some(port_name),
-                _ if port_name.ends_with("_MONO") => mono = Some(port_name),
+                _ if port_name.ends_with("_FL") => fl = Some(port_name.clone()),
+                _ if port_name.ends_with("_FR") => fr = Some(port_name.clone()),
+                _ if port_name.ends_with("_MONO") => mono = Some(port_name.clone()),
                 _ => {}
             }
         }
@@ -186,7 +186,8 @@ impl Client {
         ensure!(!port_names.is_empty(), SourceNotFoundSnafu { source_name });
 
         // If both FL and FR ports are available, use them.
-        let labeled_ports = LabeledPorts::from_ports_names(port_names);
+        // TODO(hmcty): Handle failure mode where only one port connects.
+        let labeled_ports = LabeledPorts::from_ports_names(&port_names);
         if let (Some(fl), Some(fr)) = (&labeled_ports.fl, &labeled_ports.fr) {
             info!("Subscribing to '{} [STEREO]'", source_name);
             self.subscribe_port_to(&self.state.input_fl, fl)?;
@@ -195,6 +196,9 @@ impl Client {
             info!("Subscribing to '{} [MONO]'", source_name);
             self.subscribe_port_to(&self.state.input_fl, mono)?;
             self.subscribe_port_to(&self.state.input_fr, mono)?;
+        } else if port_names.len() == 1 && self.midi_sources().contains(source_name) {
+            info!("Subscribing to '{} [MIDI]'", source_name);
+            self.subscribe_port_to(&self.state.control, &port_names[0])?;
         } else {
             return UnexpectedPortFormatSnafu {
                 client_name: source_name.to_string(),
@@ -220,6 +224,12 @@ impl Client {
             }
         }
 
+        for port in self.state.control.get_connections() {
+            if port.starts_with(source_name) {
+                self.unsubscribe_port_from(&self.state.control, &port)?;
+            }
+        }
+
         Ok(())
     }
 
@@ -230,7 +240,7 @@ impl Client {
         ensure!(!port_names.is_empty(), SinkNotFoundSnafu { sink_name });
 
         // If both FL and FR ports are available, use them.
-        let labeled_ports = LabeledPorts::from_ports_names(port_names);
+        let labeled_ports = LabeledPorts::from_ports_names(&port_names);
         if let (Some(fl), Some(fr)) = (&labeled_ports.fl, &labeled_ports.fr) {
             info!("Publishing at '{} [STEREO]'", sink_name);
             self.publish_port_at(&self.state.output_fl, fl)?;
@@ -278,9 +288,9 @@ impl Client {
     }
 
     // Connects a destination jack port to another by name.
-    fn subscribe_port_to(
+    fn subscribe_port_to<T: jack::PortSpec>(
         &self,
-        dest_port: &jack::Port<jack::AudioIn>,
+        dest_port: &jack::Port<T>,
         source_port_name: &str,
     ) -> Result<(), Error> {
         let source_port = self
@@ -339,9 +349,9 @@ impl Client {
     }
 
     // Disconnects a destination jack port from another by name.
-    fn unsubscribe_port_from(
+    fn unsubscribe_port_from<T: jack::PortSpec>(
         &self,
-        dest_port: &jack::Port<jack::AudioIn>,
+        dest_port: &jack::Port<T>,
         source_port_name: &str,
     ) -> Result<(), Error> {
         let source_port = self
