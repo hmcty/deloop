@@ -244,7 +244,9 @@ impl ControlPanel {
     }
 
     fn default() -> Self {
-        let client = deloop::Client::new();
+        let client = deloop::Client::new().unwrap();
+        client.add_track();
+
         let audio_sources = client.audio_sources();
         let audio_sinks = client.audio_sinks();
         let midi_sources = client.midi_sources();
