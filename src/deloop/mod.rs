@@ -1,16 +1,32 @@
+pub mod track;
+
+mod common;
+mod counter;
+mod track_manager;
+
 use log::{info, warn};
 use snafu::prelude::*;
 use std::collections::HashSet;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::mpsc::{channel, Receiver, Sender};
+use std::time::Duration;
 
-mod track;
-use track::Track;
+pub use track_manager::TrackInfo;
+use track_manager::{TrackCommand, TrackManager, TrackResponse, UnownedPorts};
 
 #[derive(Debug, Snafu)]
 pub enum Error {
+    #[snafu(whatever, display("Encountered internal error: {message}"))]
+    InternalError {
+        message: String,
+        #[snafu(source(from(Box<dyn std::error::Error>, Some)))]
+        source: Option<Box<dyn std::error::Error>>,
+    },
+
     #[snafu(display("{msg}: {source}"))]
     JackError { source: jack::Error, msg: String },
+
+    #[snafu(display("Failed to find track: '{track_id}'"))]
+    TrackNotFound { track_id: usize },
 
     #[snafu(display("Failed to find port by name '{name}'"))]
     PortNotFound { name: String },
@@ -24,154 +40,144 @@ pub enum Error {
     #[snafu(display("Ports don't match expected format on '{client_name}'"))]
     UnexpectedPortFormat {
         client_name: String,
-        labeled_ports: LabeledPorts,
+        labeled_ports: common::LabeledPorts,
     },
-}
-
-struct ClientState {
-    output_fl: Mutex<jack::Port<jack::AudioOut>>,
-    output_fr: Mutex<jack::Port<jack::AudioOut>>,
-    input_fl: jack::Port<jack::AudioIn>,
-    input_fr: jack::Port<jack::AudioIn>,
-    control: jack::Port<jack::MidiIn>,
-    tracks: Mutex<Vec<Track>>,
-    focused_track: AtomicUsize,
-}
-
-// Implementation of Jack processing callbacks.
-struct ClientHandler {
-    state: Arc<ClientState>,
-}
-
-impl ClientHandler {
-    // Setup handler from an existing Jack client.
-    fn new(client: &jack::Client) -> Result<Self, Error> {
-        let output_fl = client
-            .register_port("output_FL", jack::AudioOut::default())
-            .context(JackSnafu {
-                msg: "Failed to register output_FL port",
-            })?;
-        let output_fr = client
-            .register_port("output_FR", jack::AudioOut::default())
-            .context(JackSnafu {
-                msg: "Failed to register output_FR port",
-            })?;
-        let input_fl = client
-            .register_port("input_FL", jack::AudioIn::default())
-            .context(JackSnafu {
-                msg: "Failed to register input_FL port",
-            })?;
-        let input_fr = client
-            .register_port("input_FR", jack::AudioIn::default())
-            .context(JackSnafu {
-                msg: "Failed to register input_FR port",
-            })?;
-        let control = client
-            .register_port("control", jack::MidiIn::default())
-            .context(JackSnafu {
-                msg: "Failed to register control port",
-            })?;
-        let state = ClientState {
-            output_fl: Mutex::new(output_fl),
-            output_fr: Mutex::new(output_fr),
-            input_fl,
-            input_fr,
-            control,
-            tracks: Mutex::new(Vec::new()),
-            focused_track: AtomicUsize::new(0),
-        };
-
-        Ok(ClientHandler {
-            state: Arc::new(state),
-        })
-    }
-}
-
-impl jack::ProcessHandler for ClientHandler {
-    // Carries out a single iteration of the audio processing loop.
-    //
-    // In essence, forwards incoming data to the respective tracks and mixes
-    // their output to a single port.
-    fn process(&mut self, _: &jack::Client, ps: &jack::ProcessScope) -> jack::Control {
-        let mut tracks = self.state.tracks.lock().unwrap();
-        if tracks.is_empty() {
-            return jack::Control::Continue;
-        }
-
-        let focused_track = &mut tracks[self.state.focused_track.load(Ordering::Relaxed)];
-        focused_track.read_from(
-            self.state.input_fl.as_slice(ps),
-            self.state.input_fr.as_slice(ps),
-        );
-        focused_track.write_to(
-            self.state.output_fl.lock().unwrap().as_mut_slice(ps),
-            self.state.output_fr.lock().unwrap().as_mut_slice(ps),
-        );
-
-        for midi_event in self.state.control.iter(ps) {
-            focused_track.handle_midi_event(midi_event.bytes);
-        }
-        jack::Control::Continue
-    }
-
-    // Handles changes in the buffer size.
-    fn buffer_size(&mut self, _: &jack::Client, _len: jack::Frames) -> jack::Control {
-        jack::Control::Continue
-    }
-}
-
-#[derive(Debug)]
-pub struct LabeledPorts {
-    fl: Option<String>,
-    fr: Option<String>,
-    mono: Option<String>,
-}
-
-impl LabeledPorts {
-    // Identifies port types by name.
-    fn from_ports_names(port_names: &Vec<String>) -> Self {
-        let mut fl = None;
-        let mut fr = None;
-        let mut mono = None;
-        for port_name in port_names {
-            match port_name.as_str() {
-                _ if port_name.ends_with("_FL") => fl = Some(port_name.clone()),
-                _ if port_name.ends_with("_FR") => fr = Some(port_name.clone()),
-                _ if port_name.ends_with("_MONO") => mono = Some(port_name.clone()),
-                _ => {}
-            }
-        }
-
-        LabeledPorts { fl, fr, mono }
-    }
 }
 
 /// Deloop's Jack client
 ///
 /// Bridges the gap between user commands and audio processing.
 pub struct Client {
-    jack_session: jack::AsyncClient<(), ClientHandler>,
-    state: Arc<ClientState>,
+    jack_session: jack::AsyncClient<(), TrackManager>,
+    ports: UnownedPorts,
+    command_tx: Sender<TrackCommand>,
+    info_rx: Receiver<TrackInfo>,
+    response_rx: Receiver<TrackResponse>,
 }
 
-impl Client {
+impl Default for Client {
     /// Creates a new Deloop client.
     ///
     /// Opens a connection to the jack server and begins processing audio.
-    pub fn new() -> Result<Self, Error> {
+    fn default() -> Self {
         let (jack_client, _status) =
             jack::Client::new("deloop", jack::ClientOptions::default()).unwrap();
-        let handler = ClientHandler::new(&jack_client)?;
-        let state = handler.state.clone();
 
-        Ok(Client {
-            jack_session: jack_client.activate_async((), handler).unwrap(),
-            state,
-        })
+        let (command_tx, command_rx) = channel::<TrackCommand>();
+        let (info_tx, info_rx) = channel::<TrackInfo>();
+        let (response_tx, response_rx) = channel::<TrackResponse>();
+
+        let manager = TrackManager::new(&jack_client, command_rx, info_tx, response_tx);
+        let ports = manager.get_ports();
+        let jack_session = jack_client.activate_async((), manager).unwrap();
+
+        Client {
+            jack_session,
+            ports,
+            command_tx,
+            info_rx,
+            response_rx,
+        }
+    }
+}
+
+impl Client {
+    /// Creates a new track and returns its ID.
+    pub fn add_track(&self, settings: track::Settings) -> Result<usize, Error> {
+        self.command_tx
+            .send(TrackCommand::AddTrack(settings))
+            .with_whatever_context(|e| e.to_string())?;
+        let response = self
+            .response_rx
+            .recv_timeout(Duration::from_secs(5))
+            .with_whatever_context(|e| e.to_string())?;
+        match response {
+            TrackResponse::CommandFailed => Err(Error::InternalError {
+                message: "Failed to add track".to_string(),
+                source: None,
+            }),
+            TrackResponse::TrackAdded(track_id) => Ok(track_id),
+            _ => Err(Error::InternalError {
+                message: "Unexpected response".to_string(),
+                source: None,
+            }),
+        }
     }
 
-    pub fn add_track(&self) {
-        self.state.tracks.lock().unwrap().push(Track::new());
+    /// Fetches any available track status updates.
+    pub fn get_track_status(&self) -> Vec<TrackInfo> {
+        let mut statuses = Vec::new();
+        while let Ok(status) = self.info_rx.try_recv() {
+            statuses.push(status);
+        }
+
+        statuses
+    }
+
+    /// Manually advances the state of the focused track.
+    pub fn advance_track_state(&self) -> Result<(), Error> {
+        self.command_tx
+            .send(TrackCommand::AdvanceTrackState)
+            .with_whatever_context(|e| e.to_string())?;
+        let response = self
+            .response_rx
+            .recv_timeout(Duration::from_secs(5))
+            .with_whatever_context(|e| e.to_string())?;
+        match response {
+            TrackResponse::CommandFailed => Err(Error::InternalError {
+                message: "Failed to advance track state".to_string(),
+                source: None,
+            }),
+            TrackResponse::CommandSucceeded => Ok(()),
+            _ => Err(Error::InternalError {
+                message: "Unexpected response".to_string(),
+                source: None,
+            }),
+        }
+    }
+
+    /// Configures speed of a track.
+    pub fn configure_track(&self, track_id: usize, settings: track::Settings) -> Result<(), Error> {
+        self.command_tx
+            .send(TrackCommand::ConfigureTrack(track_id, settings))
+            .with_whatever_context(|e| e.to_string())?;
+        let response = self
+            .response_rx
+            .recv_timeout(Duration::from_secs(5))
+            .with_whatever_context(|e| e.to_string())?;
+        match response {
+            TrackResponse::CommandFailed => Err(Error::InternalError {
+                message: "Failed to configure track".to_string(),
+                source: None,
+            }),
+            TrackResponse::CommandSucceeded => Ok(()),
+            _ => Err(Error::InternalError {
+                message: "Unexpected response".to_string(),
+                source: None,
+            }),
+        }
+    }
+
+    /// Configures focus on a track.
+    pub fn focus_on_track(&mut self, track_id: usize) -> Result<(), Error> {
+        self.command_tx
+            .send(TrackCommand::FocusOnTrack(track_id))
+            .with_whatever_context(|e| e.to_string())?;
+        let response = self
+            .response_rx
+            .recv_timeout(Duration::from_secs(5))
+            .with_whatever_context(|e| e.to_string())?;
+        match response {
+            TrackResponse::CommandFailed => Err(Error::InternalError {
+                message: "Failed to focus on track".to_string(),
+                source: None,
+            }),
+            TrackResponse::CommandSucceeded => Ok(()),
+            _ => Err(Error::InternalError {
+                message: "Unexpected response".to_string(),
+                source: None,
+            }),
+        }
     }
 
     /// Returns a set of available audio sources.
@@ -219,23 +225,27 @@ impl Client {
     /// Starts reading audio/MIDI data from the specified source.
     pub fn subscribe_to(&mut self, source_name: &str) -> Result<(), Error> {
         let jack_client = self.jack_session.as_client();
-        let port_names = jack_client.ports(Some(source_name), None, jack::PortFlags::IS_OUTPUT);
+        let port_names = jack_client.ports(
+            Some(regex::escape(source_name).as_str()),
+            None,
+            jack::PortFlags::IS_OUTPUT,
+        );
         ensure!(!port_names.is_empty(), SourceNotFoundSnafu { source_name });
 
         // If both FL and FR ports are available, use them.
         // TODO(hmcty): Handle failure mode where only one port connects.
-        let labeled_ports = LabeledPorts::from_ports_names(&port_names);
+        let labeled_ports = common::LabeledPorts::from_ports_names(&port_names);
         if let (Some(fl), Some(fr)) = (&labeled_ports.fl, &labeled_ports.fr) {
             info!("Subscribing to '{} [STEREO]'", source_name);
-            self.subscribe_port_to(&self.state.input_fl, fl)?;
-            self.subscribe_port_to(&self.state.input_fr, fr)?;
+            self.subscribe_port_to(&self.ports.input_fl, fl)?;
+            self.subscribe_port_to(&self.ports.input_fr, fr)?;
         } else if let Some(mono) = &labeled_ports.mono {
             info!("Subscribing to '{} [MONO]'", source_name);
-            self.subscribe_port_to(&self.state.input_fl, mono)?;
-            self.subscribe_port_to(&self.state.input_fr, mono)?;
+            self.subscribe_port_to(&self.ports.input_fl, mono)?;
+            self.subscribe_port_to(&self.ports.input_fr, mono)?;
         } else if port_names.len() == 1 && self.midi_sources().contains(source_name) {
             info!("Subscribing to '{} [MIDI]'", source_name);
-            self.subscribe_port_to(&self.state.control, &port_names[0])?;
+            self.subscribe_port_to(&self.ports.control, &port_names[0])?;
         } else {
             return UnexpectedPortFormatSnafu {
                 client_name: source_name.to_string(),
@@ -249,21 +259,21 @@ impl Client {
 
     /// Stops reading audio/MIDI data from the specified source.
     pub fn unsubscribe_from(&mut self, source_name: &str) -> Result<(), Error> {
-        for port in self.state.input_fl.get_connections() {
+        for port in self.ports.input_fl.get_connections() {
             if port.starts_with(source_name) {
-                self.unsubscribe_port_from(&self.state.input_fl, &port)?;
+                self.unsubscribe_port_from(&self.ports.input_fl, &port)?;
             }
         }
 
-        for port in self.state.input_fr.get_connections() {
+        for port in self.ports.input_fr.get_connections() {
             if port.starts_with(source_name) {
-                self.unsubscribe_port_from(&self.state.input_fr, &port)?;
+                self.unsubscribe_port_from(&self.ports.input_fr, &port)?;
             }
         }
 
-        for port in self.state.control.get_connections() {
-            if port.starts_with(source_name) {
-                self.unsubscribe_port_from(&self.state.control, &port)?;
+        for port in self.ports.control.get_connections() {
+            if port.contains(source_name) {
+                self.unsubscribe_port_from(&self.ports.control, &port)?;
             }
         }
 
@@ -273,19 +283,23 @@ impl Client {
     /// Creates an outgoing audio stream to the specified sink.
     pub fn publish_to(&mut self, sink_name: &str) -> Result<(), Error> {
         let jack_client = self.jack_session.as_client();
-        let port_names = jack_client.ports(Some(sink_name), None, jack::PortFlags::IS_INPUT);
+        let port_names = jack_client.ports(
+            Some(regex::escape(sink_name).as_str()),
+            None,
+            jack::PortFlags::IS_INPUT,
+        );
         ensure!(!port_names.is_empty(), SinkNotFoundSnafu { sink_name });
 
         // If both FL and FR ports are available, use them.
-        let labeled_ports = LabeledPorts::from_ports_names(&port_names);
+        let labeled_ports = common::LabeledPorts::from_ports_names(&port_names);
         if let (Some(fl), Some(fr)) = (&labeled_ports.fl, &labeled_ports.fr) {
             info!("Publishing at '{} [STEREO]'", sink_name);
-            self.publish_port_at(&self.state.output_fl.lock().unwrap(), fl)?;
-            self.publish_port_at(&self.state.output_fr.lock().unwrap(), fr)?;
+            self.publish_port_at(&self.ports.output_fl, fl)?;
+            self.publish_port_at(&self.ports.output_fr, fr)?;
         } else if let Some(mono) = &labeled_ports.mono {
             info!("Publishing at '{} [MONO]'", sink_name);
-            self.publish_port_at(&self.state.output_fl.lock().unwrap(), mono)?;
-            self.publish_port_at(&self.state.output_fl.lock().unwrap(), mono)?;
+            self.publish_port_at(&self.ports.output_fl, mono)?;
+            self.publish_port_at(&self.ports.output_fr, mono)?;
         } else {
             return UnexpectedPortFormatSnafu {
                 client_name: sink_name.to_string(),
@@ -299,14 +313,12 @@ impl Client {
 
     /// Ends any outgoing audio streams.
     pub fn stop_publishing(&mut self) -> Result<(), Error> {
-        let output_fl = self.state.output_fl.lock().unwrap();
-        for port in output_fl.get_connections() {
-            self.stop_publishing_port_at(&output_fl, &port)?;
+        for port in self.ports.output_fl.get_connections() {
+            self.stop_publishing_port_at(&self.ports.output_fl, &port)?;
         }
 
-        let output_fr = self.state.output_fr.lock().unwrap();
-        for port in output_fr.get_connections() {
-            self.stop_publishing_port_at(&output_fr, &port)?;
+        for port in self.ports.output_fr.get_connections() {
+            self.stop_publishing_port_at(&self.ports.output_fr, &port)?;
         }
 
         Ok(())
@@ -343,9 +355,9 @@ impl Client {
     }
 
     // Connects a source jack port to another by name.
-    fn publish_port_at(
+    fn publish_port_at<T: jack::PortSpec>(
         &self,
-        source_port: &jack::Port<jack::AudioOut>,
+        source_port: &jack::Port<T>,
         dest_port_name: &str,
     ) -> Result<(), Error> {
         let dest_port = self
@@ -404,9 +416,9 @@ impl Client {
     }
 
     // Disconnects a source jack port from another by name.
-    fn stop_publishing_port_at(
+    fn stop_publishing_port_at<T: jack::PortSpec>(
         &self,
-        source_port: &jack::Port<jack::AudioOut>,
+        source_port: &jack::Port<T>,
         dest_port_name: &str,
     ) -> Result<(), Error> {
         let dest_port = self
@@ -425,6 +437,13 @@ impl Client {
         source_port: &jack::Port<A>,
         dest_port: &jack::Port<B>,
     ) -> Result<(), Error> {
+        let jack_client = self.jack_session.as_client();
+        jack_client
+            .disconnect_ports(source_port, dest_port)
+            .context(JackSnafu {
+                msg: "Failed to disconnect port",
+            })?;
+
         let dest_port_name = dest_port.name().context(JackSnafu {
             msg: "Failed to get port name",
         })?;
@@ -437,13 +456,6 @@ impl Client {
             warn!("Port already disconnected from '{}'", dest_port_name);
             return Ok(());
         }
-
-        let jack_client = self.jack_session.as_client();
-        jack_client
-            .disconnect_ports(source_port, dest_port)
-            .context(JackSnafu {
-                msg: "Failed to disconnect port",
-            })?;
 
         Ok(())
     }
