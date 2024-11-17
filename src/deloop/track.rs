@@ -13,6 +13,22 @@ pub enum StateType {
     Paused,
 }
 
+impl StateType {
+    pub fn is_recording(&self) -> bool {
+        matches!(self, StateType::Recording | StateType::OverdubbingQueued(_))
+    }
+
+    pub fn is_stopped(&self) -> bool {
+        matches!(
+            self,
+            StateType::Idle
+                | StateType::RecordingQueued(_)
+                | StateType::Paused
+                | StateType::PlayingQueued(_)
+        )
+    }
+}
+
 #[derive(Clone, Copy, PartialEq)]
 pub enum SyncTo {
     None,
@@ -241,12 +257,10 @@ impl Track {
         fl_output: &mut [f32],
         fr_output: &mut [f32],
     ) {
-        if self.state == StateType::Idle {
+        if self.fl_buffer.is_empty() {
             return;
-        } else if self.state == StateType::Paused || self.state == StateType::Recording {
+        } else if self.state.is_stopped() || self.state.is_recording() {
             self.read_head = 0;
-            return;
-        } else if self.fl_buffer.is_empty() {
             return;
         }
 
