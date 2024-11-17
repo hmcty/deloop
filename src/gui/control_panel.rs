@@ -17,6 +17,7 @@ pub struct ControlPanel {
     midi_sources: HashSet<String>,
     selected_io: SelectedIO,
     is_settings_open: bool,
+    latency: f32,
 }
 
 impl ControlPanel {
@@ -81,6 +82,7 @@ impl ControlPanel {
             midi_sources,
             selected_io: SelectedIO::default(),
             is_settings_open: false,
+            latency: 0.0,
         }
     }
 }
@@ -107,6 +109,12 @@ impl eframe::App for ControlPanel {
                     for track in &mut self.tracks {
                         track.update_counter(&global_ctr);
                     }
+                }
+                deloop::TrackInfo::WaveformUpdate(track_id, status, fl, fr) => {
+                    self.tracks[track_id as usize].update_waveform(status, &fl, &fr);
+                }
+                deloop::TrackInfo::ProcessingLatency(latency) => {
+                    self.latency = latency;
                 }
             }
         }
@@ -200,6 +208,9 @@ impl eframe::App for ControlPanel {
                     self.audio_sinks = self.client.audio_sinks();
                     self.midi_sources = self.client.midi_sources();
                 }
+
+                ui.separator();
+                ui.label(format!("Latency: {:.3} ms", self.latency * 1000.0));
             });
 
         egui::CentralPanel::default().show(ctx, |ui| {

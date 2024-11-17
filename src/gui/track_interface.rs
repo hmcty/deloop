@@ -73,6 +73,12 @@ impl TrackInterface {
         self.track_progress = buf_index / buf_size;
     }
 
+    pub fn update_waveform(&mut self, status: deloop::track::Status, fl: &[f32], fr: &[f32]) {
+        self.update(status);
+        resample(fl, &mut self.fl_display);
+        resample(fr, &mut self.fr_display);
+    }
+
     pub fn update_counter(&mut self, global_ctr: &deloop::GlobalCounter) {
         if let Some(status) = &self.track_status {
             let relative = global_ctr.relative(status.ctr);
