@@ -1,4 +1,5 @@
 use std::sync::mpsc::{Receiver, Sender};
+use std::time::{Duration, Instant};
 
 use super::counter;
 use super::track;
@@ -64,7 +65,7 @@ impl Ports<jack::AudioIn, jack::AudioOut, jack::MidiIn> {
 
 /// Unique identifiers for each track.
 ///
-/// There are a fixed number of tracks, simplifying implementation.
+/// NOTE: We fix the number of tracks to simplify implementation.
 #[repr(usize)]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum TrackId {
@@ -97,6 +98,8 @@ pub enum TrackInfo {
     FocusedTrackChanged(TrackId),
     StatusUpdate(TrackId, track::Status),
     CounterUpdate(counter::GlobalCounter),
+    WaveformUpdate(TrackId, track::Status, Vec<f32>, Vec<f32>),
+    ProcessingLatency(f32),
 }
 
 /// Manages the creation, configuration, and processing of tracks.
@@ -121,6 +124,8 @@ pub struct TrackManager {
 
     /// The track in focus, where incoming data is routed.
     focused_track_id: TrackId,
+
+    prev_processing_latency: Duration,
 }
 
 impl TrackManager {
@@ -145,6 +150,7 @@ impl TrackManager {
                 track::Track::new(TrackId::D),
             ],
             focused_track_id: TrackId::A,
+            prev_processing_latency: Duration::from_secs(0),
         }
     }
 
@@ -159,6 +165,8 @@ impl jack::ProcessHandler for TrackManager {
     /// In essence, forwards incoming data to the respective tracks and mixes
     /// their output to a single port.
     fn process(&mut self, _: &jack::Client, ps: &jack::ProcessScope) -> jack::Control {
+        let start = Instant::now();
+
         // Only process one command per iteration.
         match self.command_rx.try_recv() {
             Ok(TrackCommand::AdvanceTrackState) => {
@@ -213,15 +221,28 @@ impl jack::ProcessHandler for TrackManager {
 
             // Post a status update.
             // TODO: Post only as needed.
-            self.info_tx
-                .send(TrackInfo::StatusUpdate(track.id(), track.get_status()))
-                .unwrap();
+            let status = track.get_status();
+            let status_update = if status.state.is_being_modified() {
+                let (fl, fr) = track.get_raw_buffers();
+                TrackInfo::WaveformUpdate(track.id(), status, fl.to_vec(), fr.to_vec())
+            } else {
+                TrackInfo::StatusUpdate(track.id(), status)
+            };
+
+            self.info_tx.send(status_update).unwrap();
         }
 
         self.global_ctr.advance_all(ps.n_frames() as u64);
         self.info_tx
             .send(TrackInfo::CounterUpdate(self.global_ctr))
             .unwrap();
+        self.info_tx
+            .send(TrackInfo::ProcessingLatency(
+                self.prev_processing_latency.as_secs_f32(),
+            ))
+            .unwrap();
+
+        self.prev_processing_latency = start.elapsed();
         jack::Control::Continue
     }
 

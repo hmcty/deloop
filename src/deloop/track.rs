@@ -18,6 +18,10 @@ impl StateType {
         matches!(self, StateType::Recording | StateType::OverdubbingQueued(_))
     }
 
+    pub fn is_being_modified(&self) -> bool {
+        self.is_recording() || matches!(self, StateType::Overdubbing)
+    }
+
     pub fn is_stopped(&self) -> bool {
         matches!(
             self,
@@ -74,6 +78,12 @@ pub struct Track {
 
 impl Track {
     pub fn new(id: TrackId) -> Track {
+        // Assuming a 48kHz sampling rate, 3125000 elements would be enough
+        // to record roughly 65 seconds of audio before allocating more
+        // memory. Assuming all tracks use these settings, total base memory
+        // allocation would be 4 * 3125000 * 2 * 4 = 100 MB.
+        const DEFAULT_BUFFER_SIZE: usize = 3125000;
+
         Track {
             id,
             settings: Settings {
@@ -87,13 +97,29 @@ impl Track {
             read_head: 0,
             write_head: 0,
             last_write_head: 0,
-            fl_buffer: Vec::new(),
-            fr_buffer: Vec::new(),
+            fl_buffer: Vec::with_capacity(DEFAULT_BUFFER_SIZE),
+            fr_buffer: Vec::with_capacity(DEFAULT_BUFFER_SIZE),
         }
     }
 
+    // Unique identifier of the track.
     pub fn id(&self) -> TrackId {
         self.id
+    }
+
+    /// Get metadata about the track.
+    pub fn get_status(&self) -> Status {
+        Status {
+            state: self.state,
+            buf_index: self.read_head,
+            buf_size: self.fl_buffer.len(),
+            ctr: self.sync_ctr_id,
+        }
+    }
+
+    /// Get slices of front-left and front-right buffers.
+    pub fn get_raw_buffers(&self) -> (&[f32], &[f32]) {
+        (&self.fl_buffer, &self.fr_buffer)
     }
 
     /// Update the track with the provided settings.
@@ -107,16 +133,6 @@ impl Track {
             SyncTo::Track(track_id) => track_id,
             _ => self.id,
         };
-    }
-
-    /// Get metadata about the track.
-    pub fn get_status(&self) -> Status {
-        Status {
-            state: self.state,
-            buf_index: self.read_head,
-            buf_size: self.fl_buffer.len(),
-            ctr: self.sync_ctr_id,
-        }
     }
 
     /// Forward midi events to the track.
