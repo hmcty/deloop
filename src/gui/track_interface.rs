@@ -42,6 +42,7 @@ pub struct TrackInterface {
     track_status: Option<deloop::track::Status>,
     track_progress: f32,
     counter_progress: f32,
+    num_bars: u64,
     fl_display: Vec<f32>,
     #[allow(dead_code)]
     fr_display: Vec<f32>,
@@ -59,6 +60,7 @@ impl TrackInterface {
             track_status: None,
             track_progress: 0.0,
             counter_progress: 0.0,
+            num_bars: 0,
             fl_display: vec![0.0; 1000],
             fr_display: vec![0.0; 1000],
         }
@@ -76,6 +78,12 @@ impl TrackInterface {
             let relative = global_ctr.relative(status.ctr);
             let len = global_ctr.get_len(status.ctr);
             self.counter_progress = relative as f32 / len as f32;
+
+            if status.buf_size as u64 > len {
+                self.num_bars = status.buf_size as u64 / len;
+            } else {
+                self.num_bars = 0;
+            }
         }
     }
 
@@ -152,6 +160,16 @@ impl TrackInterface {
                             vec![indicator_top, indicator_bottom],
                             PathStroke::new(1.0, Color32::from_rgb(10, 125, 10)),
                         ));
+
+                        for i in 0..self.num_bars {
+                            let x = i as f32 / self.num_bars as f32;
+                            let indicator_top = to_screen * pos2(x, 1.0);
+                            let indicator_bottom = to_screen * pos2(x, -1.0);
+                            shapes.push(epaint::Shape::line(
+                                vec![indicator_top, indicator_bottom],
+                                PathStroke::new(1.0, Color32::from_rgb(10, 10, 125)),
+                            ));
+                        }
 
                         ui.painter().extend(shapes);
 
