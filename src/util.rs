@@ -1,5 +1,5 @@
-use log::error;
 use crate::deloop;
+use log::error;
 
 pub fn truncate_string(s: &str, max_len: usize) -> String {
     if s.len() > max_len {

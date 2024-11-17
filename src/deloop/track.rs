@@ -1,4 +1,5 @@
 use super::counter::GlobalCounter;
+use super::TrackId;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum StateType {
@@ -15,14 +16,14 @@ pub enum StateType {
 #[derive(Clone, Copy, PartialEq)]
 pub enum SyncTo {
     None,
-    Track(usize),
+    Track(TrackId),
 }
 
 impl std::fmt::Debug for SyncTo {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             SyncTo::None => write!(f, "None"),
-            SyncTo::Track(track_id) => write!(f, "Track (id={})", track_id),
+            SyncTo::Track(track_id) => write!(f, "Track (id={:?})", track_id),
         }
     }
 }
@@ -38,13 +39,13 @@ pub struct Status {
     pub state: StateType,
     pub buf_index: usize,
     pub buf_size: usize,
-    pub ctr: usize,
+    pub ctr: TrackId,
 }
 
 pub struct Track {
-    id: usize,
+    id: TrackId,
     settings: Settings,
-    sync_ctr_id: usize,
+    sync_ctr_id: TrackId,
     state: StateType,
     last_state: StateType,
     last_state_change: std::time::Instant,
@@ -56,9 +57,7 @@ pub struct Track {
 }
 
 impl Track {
-    pub fn new(id: usize, global_ctr: &mut GlobalCounter) -> Track {
-        global_ctr.register(id);
-
+    pub fn new(id: TrackId) -> Track {
         Track {
             id,
             settings: Settings {
@@ -77,6 +76,10 @@ impl Track {
         }
     }
 
+    pub fn id(&self) -> TrackId {
+        self.id
+    }
+
     /// Update the track with the provided settings.
     pub fn configure(&mut self, settings: Settings) {
         log::info!("Configuring state machine: {:?}", settings);
@@ -90,13 +93,6 @@ impl Track {
         };
     }
 
-    /// Size of the track's buffer.
-    pub fn len(&self) -> usize {
-        // Note: Assumes FL and FR buffers are always the same length.
-        debug_assert_eq!(self.fl_buffer.len(), self.fr_buffer.len());
-        self.fl_buffer.len()
-    }
-
     /// Get metadata about the track.
     pub fn get_status(&self) -> Status {
         Status {
@@ -107,40 +103,7 @@ impl Track {
         }
     }
 
-    // pub fn fetch_status(&mut self, global_ctr: &GlobalCounter) -> Status {
-    //     let metadata = Metadata {
-    //         state: self.state,
-    //         buf_index: self.read_head,
-    //         buf_size: self.fl_buffer.len(),
-    //         ctr: global_ctr.absolute(self.id),
-    //         relative_ctr: global_ctr.relative(self.id),
-    //     };
-    //     match self.state {
-    //         StateType::Recording | StateType::Overdubbing => {
-    //             let mut fl_snippet: Vec<f32> = Vec::new();
-    //             let mut fr_snippet: Vec<f32> = Vec::new();
-    //             if self.write_head < self.last_write_head {
-    //                 fl_snippet.extend_from_slice(
-    //                     &self.fl_buffer[self.last_write_head..self.fl_buffer.len()],
-    //                 );
-    //                 fr_snippet.extend_from_slice(
-    //                     &self.fr_buffer[self.last_write_head..self.fr_buffer.len()],
-    //                 );
-    //                 fl_snippet.extend_from_slice(&self.fl_buffer[0..self.write_head]);
-    //                 fr_snippet.extend_from_slice(&self.fr_buffer[0..self.write_head]);
-    //             } else {
-    //                 fl_snippet
-    //                     .extend_from_slice(&self.fl_buffer[self.last_write_head..self.write_head]);
-    //                 fr_snippet
-    //                     .extend_from_slice(&self.fr_buffer[self.last_write_head..self.write_head]);
-    //             }
-
-    //             Status::Waveform(metadata, fl_snippet, fr_snippet)
-    //         }
-    //         _ => Status::Metadata(metadata),
-    //     }
-    // }
-
+    /// Forward midi events to the track.
     pub fn handle_midi_event(&mut self, global_ctr: &mut GlobalCounter, event: &[u8]) {
         if event.len() != 3 {
             return;
@@ -148,15 +111,15 @@ impl Track {
 
         // CC 64 (sustain pedal) pressed
         // Act on press: https://x.com/ID_AA_Carmack/status/1787850053912064005
-        if event[0] == 0xB0 && event[1] == 0x40 && event[2] == 0x7F {
-            self.advance_state(global_ctr);
-        } else if event[0] == 0xB0 && event[1] == 0x40 && event[2] == 0x00 {
-            if self.state == StateType::Recording {
+        if event[0] == 0xB0 && event[1] == 0x40 {
+            // If pressed or released while recording, advance the state
+            if event[2] > 0 || self.state == StateType::Recording {
                 self.advance_state(global_ctr);
             }
         }
     }
 
+    /// Advance the track's state machine.
     pub fn advance_state(&mut self, global_ctr: &mut GlobalCounter) {
         const DOUBLE_CLICK_DURATION: std::time::Duration = std::time::Duration::from_millis(500);
         let double_click_detected = self.last_state_change.elapsed() < DOUBLE_CLICK_DURATION;
@@ -214,66 +177,58 @@ impl Track {
             SyncTo::Track(track_id) => track_id,
             _ => self.id,
         };
-        let pre_idx = global_ctr.absolute(ctr_id);
-        let post_idx = pre_idx + self.len() as u64;
+        let start = global_ctr.absolute(ctr_id);
+        let end = start + fl_input.len() as u64;
 
         match self.state {
             StateType::RecordingQueued(idx) => {
-                if post_idx < idx {
+                if end < idx {
                     return;
                 }
 
-                let mut start_idx = 0;
-                if pre_idx < idx {
-                    start_idx = (idx - pre_idx) as usize;
+                let mut record_from = 0;
+                if start < idx {
+                    record_from = (idx - start) as usize;
                 }
 
-                debug_assert!(start_idx <= fl_input.len());
-                self.fl_buffer.extend_from_slice(&fl_input[start_idx..]);
-                self.fr_buffer.extend_from_slice(&fr_input[start_idx..]);
+                debug_assert!(record_from <= fl_input.len());
+                self.fl_buffer.extend_from_slice(&fl_input[record_from..]);
+                self.fr_buffer.extend_from_slice(&fr_input[record_from..]);
                 self.state = StateType::Recording;
                 global_ctr.set_len(self.id, self.fl_buffer.len() as u64);
-                global_ctr.reset_to(self.id, (fl_input.len() - start_idx) as u64);
+
+                // Not full accurate if record_from > 0
+                global_ctr.reset_to(self.id, 0);
             }
-            StateType::Recording => {
-                self.fl_buffer.extend_from_slice(fl_input);
-                self.fr_buffer.extend_from_slice(fr_input);
-                self.write_head = self.fl_buffer.len();
-                global_ctr.set_len(self.id, self.fl_buffer.len() as u64);
-            }
+            StateType::Recording => self.record(global_ctr, fl_input, fr_input),
             StateType::OverdubbingQueued(idx) => {
-                if post_idx < idx {
-                    self.fl_buffer.extend_from_slice(fl_input);
-                    self.fr_buffer.extend_from_slice(fr_input);
-                    self.write_head = self.fl_buffer.len();
-                    global_ctr.set_len(self.id, self.fl_buffer.len() as u64);
+                if end < idx {
+                    self.record(global_ctr, fl_input, fr_input);
                 } else {
-                    let mut start_idx = 0;
-                    if pre_idx < idx {
-                        start_idx = (idx - pre_idx) as usize;
+                    let mut overdub_from = 0;
+                    if start < idx {
+                        overdub_from = (idx - start) as usize;
                     }
 
-                    // TODO: Fix this
-                    debug_assert!(start_idx <= fl_input.len());
-                    self.fl_buffer.extend_from_slice(&fl_input[start_idx..]);
-                    self.fr_buffer.extend_from_slice(&fr_input[start_idx..]);
+                    debug_assert!(overdub_from <= fl_input.len());
+                    if overdub_from > 0 {
+                        self.record(
+                            global_ctr,
+                            &fl_input[..overdub_from],
+                            &fr_input[..overdub_from],
+                        );
+                    }
+
+                    self.overdub(&fl_input[overdub_from..], &fr_input[overdub_from..]);
                     self.state = StateType::Overdubbing;
                 }
             }
             StateType::Overdubbing => {
-                if self.fl_buffer.len() == 0 {
+                if self.fl_buffer.is_empty() {
                     return;
                 }
 
-                for i in 0..fl_input.len() {
-                    if self.write_head >= self.fl_buffer.len() {
-                        self.write_head = 0;
-                    }
-
-                    self.fl_buffer[self.write_head] += fl_input[i];
-                    self.fr_buffer[self.write_head] += fr_input[i];
-                    self.write_head += 1;
-                }
+                self.overdub(fl_input, fr_input);
             }
             _ => (),
         }
@@ -291,23 +246,25 @@ impl Track {
         } else if self.state == StateType::Paused || self.state == StateType::Recording {
             self.read_head = 0;
             return;
-        } else if self.fl_buffer.len() == 0 {
+        } else if self.fl_buffer.is_empty() {
             return;
         }
 
-        let pre_idx = global_ctr.absolute(self.sync_ctr_id);
-        let mut start_idx: usize = 0;
+        let start = global_ctr.absolute(self.sync_ctr_id);
+        let end = start + fl_output.len() as u64;
+
+        let mut play_from: usize = 0;
         if let StateType::PlayingQueued(idx) = self.state {
-            if pre_idx < idx {
+            if end < idx {
                 return;
             }
 
-            start_idx = (idx - pre_idx) as usize;
+            play_from = (idx - start) as usize;
             self.state = StateType::Playing;
         }
 
-        debug_assert!(start_idx <= fl_output.len());
-        for i in start_idx..fl_output.len() {
+        debug_assert!(play_from <= fl_output.len());
+        for i in play_from..fl_output.len() {
             if self.read_head >= self.fl_buffer.len() {
                 if self.state == StateType::Recording {
                     break;
@@ -334,6 +291,27 @@ impl Track {
         self.fl_buffer.clear();
         self.fr_buffer.clear();
     }
+
+    /// Low-level function to store audio data in track buffers.
+    fn record(&mut self, global_ctr: &mut GlobalCounter, fl_input: &[f32], fr_input: &[f32]) {
+        self.fl_buffer.extend_from_slice(fl_input);
+        self.fr_buffer.extend_from_slice(fr_input);
+        self.write_head = self.fl_buffer.len();
+        global_ctr.set_len(self.id, self.fl_buffer.len() as u64);
+    }
+
+    /// Low-level function to overdub audio data in track buffers.
+    fn overdub(&mut self, fl_input: &[f32], fr_input: &[f32]) {
+        for i in 0..fl_input.len() {
+            if self.write_head >= self.fl_buffer.len() {
+                self.write_head = 0;
+            }
+
+            self.fl_buffer[self.write_head] += fl_input[i];
+            self.fr_buffer[self.write_head] += fr_input[i];
+            self.write_head += 1;
+        }
+    }
 }
 
 #[cfg(test)]
@@ -342,12 +320,12 @@ mod tests {
 
     #[test]
     fn test_stop() {
-        let gcnt = MonotonicCtr::new(48000);
-        let mut track = Track::new(48000);
+        let mut global_ctr = GlobalCounter::new(48000);
+        let mut track = Track::new(TrackId::A);
         track.state = StateType::Recording;
         let input_buffer = (0..1024).map(|x| x as f32).collect::<Vec<f32>>();
-        track.read_from(0, &input_buffer, &input_buffer);
-        track.stop();
+        track.read_from(&mut global_ctr, &input_buffer, &input_buffer);
+        track.clear();
 
         assert_eq!(track.state, StateType::Idle);
         assert_eq!(track.last_state, StateType::Idle);
@@ -356,58 +334,5 @@ mod tests {
         assert_eq!(track.write_head, 0);
         assert_eq!(track.fl_buffer.len(), 0);
         assert_eq!(track.fr_buffer.len(), 0);
-    }
-
-    #[test]
-    fn test_bpm_sync() {
-        let frame_rate = 48000;
-        let bpm = 120.0;
-        let frames_per_beat = (frame_rate as f32 * 60.0) / bpm;
-
-        // Set up track to record with BPM sync
-        let mut track = Track::new(frame_rate);
-        let settings = Settings {
-            sync: SyncTo::Bpm(bpm),
-            speed: None,
-        };
-        track.configure(settings);
-
-        // A single beat is unchanged
-        let one_beat = vec![0.0; frames_per_beat as usize];
-        track.state = StateType::Recording;
-        track.read_from(0, &one_beat, &one_beat);
-        track.advance_state();
-
-        assert_eq!(track.state, StateType::Overdubbing);
-        assert_eq!(track.fl_buffer, one_beat);
-        assert_eq!(track.fr_buffer, one_beat);
-        track.stop();
-
-        // Round down to nearest beat
-        let less_than_one_beat = vec![0.0; frames_per_beat as usize - 1];
-        track.state = StateType::Recording;
-        track.read_from(0, &less_than_one_beat, &less_than_one_beat);
-        track.advance_state();
-
-        assert_eq!(track.state, StateType::Recording);
-        assert_eq!(track.fl_buffer, less_than_one_beat);
-        assert_eq!(track.fr_buffer, less_than_one_beat);
-
-        track.read_from(0, &less_than_one_beat, &less_than_one_beat);
-        assert_eq!(track.state, StateType::Overdubbing);
-        assert_eq!(track.fl_buffer, one_beat);
-        assert_eq!(track.fr_buffer, one_beat);
-        track.stop();
-
-        // Round up to nearest beat
-        let more_than_one_beat = vec![0.0; frames_per_beat as usize + 1];
-        track.state = StateType::Recording;
-        track.read_from(0, &more_than_one_beat, &more_than_one_beat);
-        track.advance_state();
-
-        assert_eq!(track.state, StateType::Overdubbing);
-        assert_eq!(track.fl_buffer, one_beat);
-        assert_eq!(track.fr_buffer, one_beat);
-        track.stop();
     }
 }

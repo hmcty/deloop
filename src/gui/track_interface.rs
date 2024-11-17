@@ -19,6 +19,7 @@ fn create_wave_shape(
     epaint::Shape::line(points, PathStroke::new(thickness, color))
 }
 
+#[allow(dead_code)]
 fn resample(a: &[f32], b: &mut [f32]) {
     assert!(!b.is_empty());
     let step_size = a.len() as f32 / b.len() as f32;
@@ -36,75 +37,45 @@ fn resample(a: &[f32], b: &mut [f32]) {
 }
 
 pub struct TrackInterface {
-    pub track_id: usize,
+    pub track_id: deloop::TrackId,
     pub track_settings: deloop::track::Settings,
     track_status: Option<deloop::track::Status>,
     track_progress: f32,
+    counter_progress: f32,
     fl_display: Vec<f32>,
+    #[allow(dead_code)]
     fr_display: Vec<f32>,
 }
 
 impl TrackInterface {
-    pub fn new(client: &mut deloop::Client) -> TrackInterface {
+    pub fn new(track_id: deloop::TrackId) -> TrackInterface {
         let track_settings = deloop::track::Settings {
             sync: deloop::track::SyncTo::None,
             speed: None,
         };
         TrackInterface {
-            track_id: client.add_track(track_settings.clone()).unwrap(),
+            track_id,
             track_settings,
             track_status: None,
             track_progress: 0.0,
+            counter_progress: 0.0,
             fl_display: vec![0.0; 1000],
             fr_display: vec![0.0; 1000],
         }
     }
 
     pub fn update(&mut self, status: deloop::track::Status) {
+        let buf_index = status.buf_index as f32;
+        let buf_size = status.buf_size as f32;
         self.track_status = Some(status);
+        self.track_progress = buf_index / buf_size;
+    }
 
-        match status_update {
-            deloop::track::Status::Metadata(metadata) => {
-                self.track_state = metadata.state;
-                self.track_focused = metadata.is_focused;
-                self.track_progress = metadata.buf_index as f32 / metadata.buf_size as f32;
-                self.last_ctr = metadata.ctr;
-                self.last_relative_ctr = metadata.relative_ctr;
-            }
-            deloop::track::Status::Waveform(metadata, fl_buffer, fr_buffer) => {
-                self.track_state = metadata.state;
-                self.track_focused = metadata.is_focused;
-                self.track_progress = metadata.buf_index as f32 / metadata.buf_size as f32;
-                self.last_ctr = metadata.ctr;
-                self.last_relative_ctr = metadata.relative_ctr;
-                if metadata.buf_size == 0 {
-                    return;
-                }
-
-                if self.track_state == deloop::track::StateType::Recording {
-                    resample(&fl_buffer, &mut self.fl_display);
-                    resample(&fr_buffer, &mut self.fr_display);
-                } else {
-                    let frac = fl_buffer.len() as f32 / metadata.buf_size as f32;
-                    let size = (self.fl_display.len() as f32 * frac) as usize;
-                    let write_head = (self.track_progress * self.fl_display.len() as f32) as usize;
-
-                    for i in 0..size {
-                        let j = (i as f32 / size as f32 * fl_buffer.len() as f32) as usize;
-                        if write_head + i >= self.fl_display.len() {
-                            break;
-                        }
-
-                        self.fl_display[write_head + i] = fl_buffer[j];
-                        self.fr_display[write_head + i] = fr_buffer[j];
-                    }
-                }
-            }
-        }
-
-        if self.track_state == deloop::track::StateType::Idle {
-            self.fl_display.fill(0.0);
-            self.fr_display.fill(0.0);
+    pub fn update_counter(&mut self, global_ctr: &deloop::GlobalCounter) {
+        if let Some(status) = &self.track_status {
+            let relative = global_ctr.relative(status.ctr);
+            let len = global_ctr.get_len(status.ctr);
+            self.counter_progress = relative as f32 / len as f32;
         }
     }
 
@@ -170,33 +141,21 @@ impl TrackInterface {
 
                         let indicator_top = to_screen * pos2(self.track_progress, 1.0);
                         let indicator_bottom = to_screen * pos2(self.track_progress, -1.0);
-
-                        if is_focused {
-                            // let bps = self.quantize_to_bpm / 60.0;
-                            // let beat_duration_s = 1.0 / bps;
-
-                            // let now = std::time::Instant::now();
-                            // let is_led_on = (now.duration_since(self.last_led_toggle).as_secs_f32()
-                            //     % beat_duration_s)
-                            //     < (beat_duration_s / 4.0);
-
-                            // if is_led_on {
-                            //     shapes.push(epaint::Shape::circle_filled(
-                            //         to_screen * egui::pos2(0.95, -0.8),
-                            //         5.0,
-                            //         Color32::from_rgb(125, 10, 10),
-                            //     ));
-                            // }
-                        }
-
                         shapes.push(epaint::Shape::line(
                             vec![indicator_top, indicator_bottom],
                             PathStroke::new(1.0, Color32::from_rgb(125, 10, 10)),
                         ));
 
+                        let indicator_top = to_screen * pos2(self.counter_progress, 1.0);
+                        let indicator_bottom = to_screen * pos2(self.counter_progress, -1.0);
+                        shapes.push(epaint::Shape::line(
+                            vec![indicator_top, indicator_bottom],
+                            PathStroke::new(1.0, Color32::from_rgb(10, 125, 10)),
+                        ));
+
                         ui.painter().extend(shapes);
 
-                        return resp;
+                        resp
                     })
                     .inner
             })
@@ -211,7 +170,7 @@ impl TrackInterface {
                 egui::Frame::none()
                     .fill(ui.visuals().widgets.noninteractive.bg_fill)
                     .show(ui, |ui| {
-                        ui.label(format!("Track {}", self.track_id));
+                        ui.label(format!("Track {:?}", self.track_id));
                         let Some(status) = self.track_status.clone() else {
                             return;
                         };
@@ -238,11 +197,15 @@ impl TrackInterface {
                                         .unwrap();
                                 });
 
-                                (0..4).filter(|&i| i != self.track_id).for_each(|i| {
+                                for track_id in deloop::TrackId::ALL_TRACKS {
+                                    if track_id == self.track_id {
+                                        continue;
+                                    }
+
                                     ui.selectable_value(
                                         &mut self.track_settings.sync,
-                                        deloop::track::SyncTo::Track(i),
-                                        format!("Track {}", i),
+                                        deloop::track::SyncTo::Track(track_id),
+                                        format!("Track {:?}", track_id),
                                     )
                                     .clicked()
                                     .then(|| {
@@ -256,7 +219,7 @@ impl TrackInterface {
                                             )
                                             .unwrap();
                                     });
-                                });
+                                }
                             });
                     });
                 ui.set_min_width(ui.available_width());

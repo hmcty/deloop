@@ -8,12 +8,10 @@ use crate::util;
 use crate::gui::io_selector::SelectedIO;
 use crate::gui::track_interface::TrackInterface;
 
-const NUM_TRACKS: usize = 4;
-
 pub struct ControlPanel {
     client: deloop::Client,
-    tracks: [TrackInterface; NUM_TRACKS],
-    focused_track: usize,
+    tracks: [TrackInterface; deloop::TrackId::NUM_TRACKS],
+    focused_track: deloop::TrackId,
     audio_sources: HashSet<String>,
     audio_sinks: HashSet<String>,
     midi_sources: HashSet<String>,
@@ -63,12 +61,12 @@ impl ControlPanel {
     }
 
     fn default() -> Self {
-        let mut client = deloop::Client::default();
+        let client = deloop::Client::default();
         let tracks = [
-            TrackInterface::new(&mut client),
-            TrackInterface::new(&mut client),
-            TrackInterface::new(&mut client),
-            TrackInterface::new(&mut client),
+            TrackInterface::new(deloop::TrackId::A),
+            TrackInterface::new(deloop::TrackId::B),
+            TrackInterface::new(deloop::TrackId::C),
+            TrackInterface::new(deloop::TrackId::D),
         ];
         let audio_sources = client.audio_sources();
         let audio_sinks = client.audio_sinks();
@@ -77,7 +75,7 @@ impl ControlPanel {
         Self {
             client,
             tracks,
-            focused_track: 0,
+            focused_track: deloop::TrackId::A,
             audio_sources,
             audio_sinks,
             midi_sources,
@@ -85,8 +83,6 @@ impl ControlPanel {
             is_settings_open: false,
         }
     }
-
-    fn show_track_controls(&mut self, ui: &mut egui::Ui) {}
 }
 
 impl eframe::App for ControlPanel {
@@ -99,14 +95,17 @@ impl eframe::App for ControlPanel {
         ctx.request_repaint(); // Run continuously
 
         // Process track updates
-        for track_info in self.client.get_track_status() {
+        for track_info in self.client.get_track_updates() {
             match track_info {
                 deloop::TrackInfo::FocusedTrackChanged(track_id) => {
                     self.focused_track = track_id;
                 }
-                deloop::TrackInfo::StatusUpdate(id, status) => {
-                    if let Some(track) = self.tracks.get_mut(id) {
-                        track.update(status);
+                deloop::TrackInfo::StatusUpdate(track_id, status) => {
+                    self.tracks[track_id as usize].update(status);
+                }
+                deloop::TrackInfo::CounterUpdate(global_ctr) => {
+                    for track in &mut self.tracks {
+                        track.update_counter(&global_ctr);
                     }
                 }
             }
@@ -207,7 +206,8 @@ impl eframe::App for ControlPanel {
             let spacing = ui.spacing_mut();
             spacing.item_spacing = egui::vec2(0.0, 0.0);
 
-            let available_width = (ui.available_width() - 16.0) / 4 as f32;
+            let available_width =
+                (ui.available_width() - 16.0) / deloop::TrackId::NUM_TRACKS as f32;
             ui.with_layout(egui::Layout::left_to_right(egui::Align::TOP), |ui| {
                 for track in &mut self.tracks {
                     let is_focused = track.track_id == self.focused_track;
@@ -215,14 +215,12 @@ impl eframe::App for ControlPanel {
                         .show_thumbnail(ui, &mut self.client, available_width, is_focused)
                         .clicked()
                     {
-                        self.client.focus_on_track(track.track_id);
+                        let _ = self.client.focus_on_track(track.track_id);
                     }
                 }
             });
 
-            if let Some(track) = self.tracks.get_mut(self.focused_track) {
-                track.show_controls(ui, &mut self.client);
-            }
+            self.tracks[self.focused_track as usize].show_controls(ui, &mut self.client);
 
             ui.input(|i| {
                 for event in &i.raw.events {
@@ -234,10 +232,8 @@ impl eframe::App for ControlPanel {
                         modifiers: _,
                     } = event
                     {
-                        if *pressed {
-                            if *key == egui::Key::Space {
-                                _ = util::log_on_err(self.client.advance_track_state());
-                            }
+                        if *pressed && *key == egui::Key::Space {
+                            _ = util::log_on_err(self.client.advance_track_state());
                         }
                     }
                 }

@@ -1,7 +1,5 @@
-use std::collections::BTreeMap;
 use std::sync::mpsc::{Receiver, Sender};
 
-use super::common;
 use super::counter;
 use super::track;
 
@@ -64,25 +62,41 @@ impl Ports<jack::AudioIn, jack::AudioOut, jack::MidiIn> {
     }
 }
 
+/// Unique identifiers for each track.
+///
+/// There are a fixed number of tracks, simplifying implementation.
+#[repr(usize)]
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum TrackId {
+    A = 0,
+    B = 1,
+    C = 2,
+    D = 3,
+}
+
+impl TrackId {
+    pub const NUM_TRACKS: usize = 4;
+    pub const ALL_TRACKS: [Self; Self::NUM_TRACKS] =
+        [TrackId::A, TrackId::B, TrackId::C, TrackId::D];
+}
+
 // TODO: Add unique indentifiers for commands
 pub enum TrackCommand {
-    AddTrack(track::Settings),
     AdvanceTrackState,
-    FocusOnTrack(usize),
-    ConfigureTrack(usize, track::Settings),
-    // RemoveTrack(usize),
+    FocusOnTrack(TrackId),
+    ConfigureTrack(TrackId, track::Settings),
 }
 
 pub enum TrackResponse {
+    #[allow(dead_code)]
     CommandFailed,
     CommandSucceeded,
-    TrackAdded(usize),
-    // TrackRemoved(usize),
 }
 
 pub enum TrackInfo {
-    FocusedTrackChanged(usize),
-    StatusUpdate(usize, track::Status),
+    FocusedTrackChanged(TrackId),
+    StatusUpdate(TrackId, track::Status),
+    CounterUpdate(counter::GlobalCounter),
 }
 
 /// Manages the creation, configuration, and processing of tracks.
@@ -102,11 +116,11 @@ pub struct TrackManager {
     /// A frame index to synchronize all tracks.
     global_ctr: counter::GlobalCounter,
 
-    /// Tracks indexed by unique identifiers.
-    tracks: BTreeMap<usize, track::Track>,
+    /// The tracks being managed.
+    tracks: [track::Track; TrackId::NUM_TRACKS],
 
     /// The track in focus, where incoming data is routed.
-    focused_track_id: usize,
+    focused_track_id: TrackId,
 }
 
 impl TrackManager {
@@ -124,21 +138,18 @@ impl TrackManager {
             info_tx,
             response_tx,
             global_ctr: counter::GlobalCounter::new(sample_rate),
-            tracks: BTreeMap::new(),
-            focused_track_id: 0,
+            tracks: [
+                track::Track::new(TrackId::A),
+                track::Track::new(TrackId::B),
+                track::Track::new(TrackId::C),
+                track::Track::new(TrackId::D),
+            ],
+            focused_track_id: TrackId::A,
         }
     }
 
     pub fn get_ports(&self) -> UnownedPorts {
         self.ports.clone_unowned()
-    }
-
-    pub fn add_track(&mut self, client: &jack::Client, settings: track::Settings) -> TrackResponse {
-        let track_id = self.tracks.len();
-        let mut track = track::Track::new(track_id, &mut self.global_ctr);
-        track.configure(settings);
-        self.tracks.insert(track_id, track);
-        TrackResponse::TrackAdded(track_id)
     }
 }
 
@@ -147,30 +158,21 @@ impl jack::ProcessHandler for TrackManager {
     ///
     /// In essence, forwards incoming data to the respective tracks and mixes
     /// their output to a single port.
-    fn process(&mut self, client: &jack::Client, ps: &jack::ProcessScope) -> jack::Control {
+    fn process(&mut self, _: &jack::Client, ps: &jack::ProcessScope) -> jack::Control {
         // Only process one command per iteration.
         match self.command_rx.try_recv() {
-            Ok(TrackCommand::AddTrack(settings)) => {
-                let resp = self.add_track(client, settings);
-                self.response_tx.send(resp).unwrap();
-            }
             Ok(TrackCommand::AdvanceTrackState) => {
-                self.tracks
-                    .get_mut(&self.focused_track_id)
-                    .map(|focused_track| {
-                        focused_track.advance_state(&mut self.global_ctr);
-                        self.response_tx
-                            .send(TrackResponse::CommandSucceeded)
-                            .unwrap();
-                    });
+                let track_idx = self.focused_track_id as usize;
+                self.tracks[track_idx].advance_state(&mut self.global_ctr);
+                self.response_tx
+                    .send(TrackResponse::CommandSucceeded)
+                    .unwrap();
             }
             Ok(TrackCommand::ConfigureTrack(track_id, settings)) => {
-                self.tracks.get_mut(&track_id).map(|track| {
-                    track.configure(settings);
-                    self.response_tx
-                        .send(TrackResponse::CommandSucceeded)
-                        .unwrap();
-                });
+                self.tracks[track_id as usize].configure(settings);
+                self.response_tx
+                    .send(TrackResponse::CommandSucceeded)
+                    .unwrap();
             }
             Ok(TrackCommand::FocusOnTrack(track_id)) => {
                 self.focused_track_id = track_id;
@@ -184,22 +186,18 @@ impl jack::ProcessHandler for TrackManager {
             _ => {}
         }
 
-        // Forward incoming data to the focused track.
-        self.tracks
-            .get_mut(&self.focused_track_id)
-            .map(|focused_track| {
-                // Process MIDI events first, as they impact control flow.
-                for midi_event in self.ports.control.iter(ps) {
-                    focused_track.handle_midi_event(&mut self.global_ctr, midi_event.bytes);
-                }
+        // Process MIDI events first, as they impact control flow.
+        let focused_track = &mut self.tracks[self.focused_track_id as usize];
+        for midi_event in self.ports.control.iter(ps) {
+            focused_track.handle_midi_event(&mut self.global_ctr, midi_event.bytes);
+        }
 
-                // Read audio data from stereo input ports.
-                focused_track.read_from(
-                    &mut self.global_ctr,
-                    self.ports.input_fl.as_slice(ps),
-                    self.ports.input_fr.as_slice(ps),
-                );
-            });
+        // Read audio data from stereo input ports.
+        focused_track.read_from(
+            &mut self.global_ctr,
+            self.ports.input_fl.as_slice(ps),
+            self.ports.input_fr.as_slice(ps),
+        );
 
         // Clear output buffers.
         let output_fl = self.ports.output_fl.as_mut_slice(ps);
@@ -210,17 +208,20 @@ impl jack::ProcessHandler for TrackManager {
         }
 
         // Mix all tracks.
-        for (track_id, track) in self.tracks.iter_mut() {
+        for track in self.tracks.iter_mut() {
             track.write_to(&mut self.global_ctr, output_fl, output_fr);
 
             // Post a status update.
             // TODO: Post only as needed.
             self.info_tx
-                .send(TrackInfo::StatusUpdate(*track_id, track.get_status()))
+                .send(TrackInfo::StatusUpdate(track.id(), track.get_status()))
                 .unwrap();
         }
 
         self.global_ctr.advance_all(ps.n_frames() as u64);
+        self.info_tx
+            .send(TrackInfo::CounterUpdate(self.global_ctr))
+            .unwrap();
         jack::Control::Continue
     }
 

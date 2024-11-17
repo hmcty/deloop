@@ -10,8 +10,9 @@ use std::collections::HashSet;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::time::Duration;
 
-pub use track_manager::TrackInfo;
+pub use counter::GlobalCounter;
 use track_manager::{TrackCommand, TrackManager, TrackResponse, UnownedPorts};
+pub use track_manager::{TrackId, TrackInfo};
 
 #[derive(Debug, Snafu)]
 pub enum Error {
@@ -82,36 +83,14 @@ impl Default for Client {
 }
 
 impl Client {
-    /// Creates a new track and returns its ID.
-    pub fn add_track(&self, settings: track::Settings) -> Result<usize, Error> {
-        self.command_tx
-            .send(TrackCommand::AddTrack(settings))
-            .with_whatever_context(|e| e.to_string())?;
-        let response = self
-            .response_rx
-            .recv_timeout(Duration::from_secs(5))
-            .with_whatever_context(|e| e.to_string())?;
-        match response {
-            TrackResponse::CommandFailed => Err(Error::InternalError {
-                message: "Failed to add track".to_string(),
-                source: None,
-            }),
-            TrackResponse::TrackAdded(track_id) => Ok(track_id),
-            _ => Err(Error::InternalError {
-                message: "Unexpected response".to_string(),
-                source: None,
-            }),
-        }
-    }
-
-    /// Fetches any available track status updates.
-    pub fn get_track_status(&self) -> Vec<TrackInfo> {
-        let mut statuses = Vec::new();
-        while let Ok(status) = self.info_rx.try_recv() {
-            statuses.push(status);
+    /// Fetches any available track updates.
+    pub fn get_track_updates(&self) -> Vec<TrackInfo> {
+        let mut updates = Vec::new();
+        while let Ok(update) = self.info_rx.try_recv() {
+            updates.push(update);
         }
 
-        statuses
+        updates
     }
 
     /// Manually advances the state of the focused track.
@@ -129,15 +108,15 @@ impl Client {
                 source: None,
             }),
             TrackResponse::CommandSucceeded => Ok(()),
-            _ => Err(Error::InternalError {
-                message: "Unexpected response".to_string(),
-                source: None,
-            }),
         }
     }
 
     /// Configures speed of a track.
-    pub fn configure_track(&self, track_id: usize, settings: track::Settings) -> Result<(), Error> {
+    pub fn configure_track(
+        &self,
+        track_id: TrackId,
+        settings: track::Settings,
+    ) -> Result<(), Error> {
         self.command_tx
             .send(TrackCommand::ConfigureTrack(track_id, settings))
             .with_whatever_context(|e| e.to_string())?;
@@ -151,15 +130,11 @@ impl Client {
                 source: None,
             }),
             TrackResponse::CommandSucceeded => Ok(()),
-            _ => Err(Error::InternalError {
-                message: "Unexpected response".to_string(),
-                source: None,
-            }),
         }
     }
 
     /// Configures focus on a track.
-    pub fn focus_on_track(&mut self, track_id: usize) -> Result<(), Error> {
+    pub fn focus_on_track(&mut self, track_id: TrackId) -> Result<(), Error> {
         self.command_tx
             .send(TrackCommand::FocusOnTrack(track_id))
             .with_whatever_context(|e| e.to_string())?;
@@ -173,10 +148,6 @@ impl Client {
                 source: None,
             }),
             TrackResponse::CommandSucceeded => Ok(()),
-            _ => Err(Error::InternalError {
-                message: "Unexpected response".to_string(),
-                source: None,
-            }),
         }
     }
 

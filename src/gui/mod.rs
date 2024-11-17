@@ -1,6 +1,6 @@
 mod control_panel;
-mod track_interface;
 mod io_selector;
+mod track_interface;
 
 use control_panel::ControlPanel;
 
