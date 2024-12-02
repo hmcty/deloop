@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+enum LogLevel {
+  UNKNOWN = 0;
+  DEBUG = 1;
+  INFO = 2;
+  WARNING = 3;
+  ERROR = 4;
+  CRITICAL = 5;
+}
+
+message LogEntry {
+  LogLevel level = 1;
+  uint32 tick = 2;
+  uint32 id = 3;
+  optional uint32 arg1 = 4; 
+  optional uint32 arg2 = 5;
+  optional uint32 arg3 = 6;
+  optional uint32 arg4 = 7;
+}
+

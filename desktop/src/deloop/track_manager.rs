@@ -85,6 +85,7 @@ impl TrackId {
 pub enum TrackCommand {
     AdvanceTrackState,
     FocusOnTrack(TrackId),
+    EnqueueOverdub(TrackId),
     ConfigureTrack(TrackId, track::Settings),
 }
 
@@ -125,6 +126,7 @@ pub struct TrackManager {
     /// The track in focus, where incoming data is routed.
     focused_track_id: TrackId,
 
+    // Latency of the most recent audio processing loop.
     prev_processing_latency: Duration,
 }
 
@@ -172,6 +174,12 @@ impl jack::ProcessHandler for TrackManager {
             Ok(TrackCommand::AdvanceTrackState) => {
                 let track_idx = self.focused_track_id as usize;
                 self.tracks[track_idx].advance_state(&mut self.global_ctr);
+                self.response_tx
+                    .send(TrackResponse::CommandSucceeded)
+                    .unwrap();
+            }
+            Ok(TrackCommand::EnqueueOverdub(track_id)) => {
+                self.tracks[track_id as usize].enter_state(track::StateType::Overdubbing);
                 self.response_tx
                     .send(TrackResponse::CommandSucceeded)
                     .unwrap();
