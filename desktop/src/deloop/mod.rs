@@ -111,6 +111,23 @@ impl Client {
         }
     }
 
+    pub fn enqueue_overdub(&self, track_id: TrackId) -> Result<(), Error> {
+        self.command_tx
+            .send(TrackCommand::EnqueueOverdub(track_id))
+            .with_whatever_context(|e| e.to_string())?;
+        let response = self
+            .response_rx
+            .recv_timeout(Duration::from_secs(5))
+            .with_whatever_context(|e| e.to_string())?;
+        match response {
+            TrackResponse::CommandFailed => Err(Error::InternalError {
+                message: "Failed to enqueue overdub".to_string(),
+                source: None,
+            }),
+            TrackResponse::CommandSucceeded => Ok(()),
+        }
+    }
+
     /// Configures speed of a track.
     pub fn configure_track(
         &self,

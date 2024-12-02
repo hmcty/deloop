@@ -1,0 +1,9 @@
+[submodule "mk0/external/FreeRTOS"]
+	path = mk0/external/FreeRTOS
+	url = git@github.com:FreeRTOS/FreeRTOS.git
+[submodule "mk0/external/STM32CubeF4"]
+	path = mk0/external/STM32CubeF4
+	url = git@github.com:STMicroelectronics/STM32CubeF4.git
+[submodule "mk0/external/nanopb"]
+	path = mk0/external/nanopb
+	url = git@github.com:nanopb/nanopb.git

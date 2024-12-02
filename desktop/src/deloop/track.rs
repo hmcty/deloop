@@ -4,7 +4,8 @@ use super::TrackId;
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum StateType {
     Idle,
-    RecordingQueued(u64),
+    RecordingQueuedOnTick(u64),
+    RecordingQueuedOnRisingEdge(f32),
     Recording,
     OverdubbingQueued(u64),
     Overdubbing,
@@ -26,7 +27,8 @@ impl StateType {
         matches!(
             self,
             StateType::Idle
-                | StateType::RecordingQueued(_)
+                | StateType::RecordingQueuedOnTick(_)
+                | StateType::RecordingQueuedOnRisingEdge(_)
                 | StateType::Paused
                 | StateType::PlayingQueued(_)
         )
@@ -37,6 +39,7 @@ impl StateType {
 pub enum SyncTo {
     None,
     Track(TrackId),
+    RisingEdge(f32),
 }
 
 impl std::fmt::Debug for SyncTo {
@@ -44,6 +47,7 @@ impl std::fmt::Debug for SyncTo {
         match self {
             SyncTo::None => write!(f, "None"),
             SyncTo::Track(track_id) => write!(f, "Track (id={:?})", track_id),
+            SyncTo::RisingEdge(_) => write!(f, "Rising edge"),
         }
     }
 }
@@ -162,22 +166,22 @@ impl Track {
             return;
         }
 
-        self.last_state = self.state;
-        self.last_state_change = std::time::Instant::now();
-
-        // Select the counter to sync with
-
         // Perform state transition
-        self.state = match self.state {
+        self.enter_state(match self.state {
             StateType::Idle => {
                 // If we're the owner of the counter, request on the next frame
-                if self.sync_ctr_id == self.id {
-                    StateType::RecordingQueued(global_ctr.absolute(self.sync_ctr_id))
-                } else {
-                    StateType::RecordingQueued(global_ctr.get_next_loop(self.sync_ctr_id))
+                match self.settings.sync {
+                    SyncTo::None => StateType::RecordingQueuedOnTick(global_ctr.absolute(self.id)),
+                    SyncTo::Track(track_id) => {
+                        StateType::RecordingQueuedOnTick(global_ctr.get_next_loop(track_id))
+                    }
+                    SyncTo::RisingEdge(thresh) => StateType::RecordingQueuedOnRisingEdge(thresh),
                 }
             }
-            StateType::RecordingQueued(idx) => StateType::RecordingQueued(idx),
+            StateType::RecordingQueuedOnTick(idx) => StateType::RecordingQueuedOnTick(idx),
+            StateType::RecordingQueuedOnRisingEdge(thresh) => {
+                StateType::RecordingQueuedOnRisingEdge(thresh)
+            }
             StateType::Recording => {
                 // If we're the owner of the counter, request on the next frame
                 if self.sync_ctr_id == self.id {
@@ -193,7 +197,14 @@ impl Track {
             StateType::Paused => {
                 StateType::PlayingQueued(global_ctr.get_next_loop(self.sync_ctr_id))
             }
-        };
+        });
+    }
+
+    /// Updates the current state.
+    pub fn enter_state(&mut self, state: StateType) {
+        self.last_state = self.state;
+        self.last_state_change = std::time::Instant::now();
+        self.state = state;
     }
 
     /// Handle incoming audio data.
@@ -213,7 +224,7 @@ impl Track {
         let end = start + fl_input.len() as u64;
 
         match self.state {
-            StateType::RecordingQueued(idx) => {
+            StateType::RecordingQueuedOnTick(idx) => {
                 if end < idx {
                     return;
                 }
@@ -228,9 +239,19 @@ impl Track {
                 self.fr_buffer.extend_from_slice(&fr_input[record_from..]);
                 self.state = StateType::Recording;
                 global_ctr.set_len(self.id, self.fl_buffer.len() as u64);
-
-                // Not full accurate if record_from > 0
-                global_ctr.reset_to(self.id, 0);
+                global_ctr.reset_to(self.id, (fl_input.len() - record_from) as u64);
+            }
+            StateType::RecordingQueuedOnRisingEdge(thresh) => {
+                for i in 0..fl_input.len() {
+                    if fl_input[i] > thresh || fr_input[i] > thresh {
+                        self.fl_buffer.extend_from_slice(&fl_input[i..]);
+                        self.fr_buffer.extend_from_slice(&fr_input[i..]);
+                        self.state = StateType::Recording;
+                        global_ctr.set_len(self.id, self.fl_buffer.len() as u64);
+                        global_ctr.reset_to(self.id, (fl_input.len() - i) as u64);
+                        break;
+                    }
+                }
             }
             StateType::Recording => self.record(global_ctr, fl_input, fr_input),
             StateType::OverdubbingQueued(idx) => {

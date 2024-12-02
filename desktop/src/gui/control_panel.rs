@@ -243,8 +243,33 @@ impl eframe::App for ControlPanel {
                         modifiers: _,
                     } = event
                     {
-                        if *pressed && *key == egui::Key::Space {
-                            _ = util::log_on_err(self.client.advance_track_state());
+                        if *pressed {
+                            match *key {
+                                egui::Key::Space => {
+                                    _ = util::log_on_err(self.client.advance_track_state());
+                                }
+                                egui::Key::Num1 => {
+                                    _ = util::log_on_err(
+                                        self.client.focus_on_track(deloop::TrackId::A),
+                                    );
+                                }
+                                egui::Key::Num2 => {
+                                    _ = util::log_on_err(
+                                        self.client.focus_on_track(deloop::TrackId::B),
+                                    );
+                                }
+                                egui::Key::Num3 => {
+                                    _ = util::log_on_err(
+                                        self.client.focus_on_track(deloop::TrackId::C),
+                                    );
+                                }
+                                egui::Key::Num4 => {
+                                    _ = util::log_on_err(
+                                        self.client.focus_on_track(deloop::TrackId::D),
+                                    );
+                                }
+                                _ => {}
+                            }
                         }
                     }
                 }
