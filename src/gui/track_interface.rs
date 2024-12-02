@@ -43,6 +43,7 @@ pub struct TrackInterface {
     track_progress: f32,
     counter_progress: f32,
     num_bars: u64,
+    rising_edge_threshold: f32,
     fl_display: Vec<f32>,
     #[allow(dead_code)]
     fr_display: Vec<f32>,
@@ -61,6 +62,7 @@ impl TrackInterface {
             track_progress: 0.0,
             counter_progress: 0.0,
             num_bars: 0,
+            rising_edge_threshold: 0.15,
             fl_display: vec![0.0; 1000],
             fr_display: vec![0.0; 1000],
         }
@@ -221,6 +223,24 @@ impl TrackInterface {
                                         .unwrap();
                                 });
 
+                                ui.selectable_value(
+                                    &mut self.track_settings.sync,
+                                    deloop::track::SyncTo::RisingEdge(self.rising_edge_threshold),
+                                    "Rising edge",
+                                )
+                                .clicked()
+                                .then(|| {
+                                    client
+                                        .configure_track(
+                                            self.track_id,
+                                            deloop::track::Settings {
+                                                sync: self.track_settings.sync,
+                                                speed: None,
+                                            },
+                                        )
+                                        .unwrap();
+                                });
+
                                 for track_id in deloop::TrackId::ALL_TRACKS {
                                     if track_id == self.track_id {
                                         continue;
@@ -245,7 +265,22 @@ impl TrackInterface {
                                     });
                                 }
                             });
+
+                        if let deloop::track::SyncTo::RisingEdge(_) = self.track_settings.sync {
+                            ui.add(
+                                egui::Slider::new(&mut self.rising_edge_threshold, 0.0..=1.0)
+                                    .text("Threshold"),
+                            );
+                        }
                     });
+
+                ui.button("Overdub")
+                    .on_hover_text("Enqueue overdub command")
+                    .clicked()
+                    .then(|| {
+                        client.enqueue_overdub(self.track_id).unwrap();
+                    });
+
                 ui.set_min_width(ui.available_width());
                 ui.set_min_height(ui.available_height());
             });
