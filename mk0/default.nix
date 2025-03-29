@@ -9,6 +9,10 @@ pkgs.stdenv.mkDerivation rec {
   buildInputs = [
     pkgs.cmake
     pkgs.gcc-arm-embedded-13
+    pkgs.protobuf_25
+    pkgs.python3
+    pkgs.python3Packages.protobuf
+    pkgs.python3Packages.grpcio-tools
   ];
 
   configurePhase = ''

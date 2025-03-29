@@ -9,6 +9,10 @@
 #include "FreeRTOSConfig.h"
 #include "task.h"
 
+#include "logging.hpp"
+
+#include "uart_stream.hpp"
+
 #include "drv/wm8960.hpp"
 #include "tasks/tasks.hpp"
 
@@ -34,23 +38,10 @@ int main(void) {
   HAL_Init();
   ConfigureSystemClock();
 
-  // Initialize UART.
-  UART_handle.Instance = USART2;
-  UART_handle.Init.BaudRate = 115200;
-  UART_handle.Init.WordLength = UART_WORDLENGTH_8B;
-  UART_handle.Init.StopBits = UART_STOPBITS_1;
-  UART_handle.Init.Parity = UART_PARITY_NONE;
-  UART_handle.Init.HwFlowCtl = UART_HWCONTROL_NONE;
-  UART_handle.Init.Mode = UART_MODE_TX_RX;
-  if (HAL_UART_Init(&UART_handle) != HAL_OK) {
+  deloop::Error err = deloop::UartStream::Init();
+  if (err != deloop::Error::kOk) {
     ErrorHandler();
   }
-
-//HAL_UART_Transmit(
-//  &UART_handle,
-//  reinterpret_cast<uint8_t *>(const_cast<char *>(hello.c_str())),
-//  hello.size(),
-//  0xFFFF);
 
   // Initialize LED.
   __HAL_RCC_GPIOA_CLK_ENABLE();
@@ -66,22 +57,22 @@ int main(void) {
   xTaskCreateStatic(LEDBlinkTask, "Task 1", task_stack_size, NULL, 1,
                     &(task_stack[0]), &task_buffer);
 
-//if (WM8960::Init() != 0) {
-//  ErrorHandler();
-//}
-//AddSineWaveTask();
+  // if (WM8960::Init() != 0) {
+  //   ErrorHandler();
+  // }
+  // AddSineWaveTask();
 
   // Start the FreeRTOS scheduler.
   vTaskStartScheduler();
 
   // Infinite loop
   while (1) {
-  //HAL_UART_Transmit(
-  //  &UART_handle,
-  //  reinterpret_cast<uint8_t *>(const_cast<char *>(hello.c_str())),
-  //  hello.size(),
-  //  0xFFFFFFFF);
-  //HAL_Delay(1000);
+    // HAL_UART_Transmit(
+    //   &UART_handle,
+    //   reinterpret_cast<uint8_t *>(const_cast<char *>(hello.c_str())),
+    //   hello.size(),
+    //   0xFFFFFFFF);
+    // HAL_Delay(1000);
   }
 }
 
@@ -100,10 +91,9 @@ static void LEDBlinkTask(void *pvParameters) {
     // vTaskDelay(5000);
     std::string hello = "Hello, World!\r\n";
     HAL_UART_Transmit(
-      &UART_handle,
-      reinterpret_cast<uint8_t *>(const_cast<char *>(hello.c_str())),
-      hello.size(),
-      0xFFFFFFFF);
+        &UART_handle,
+        reinterpret_cast<uint8_t *>(const_cast<char *>(hello.c_str())),
+        hello.size(), 0xFFFFFFFF);
     vTaskDelay(5000);
   }
 }
@@ -165,5 +155,6 @@ static void ConfigureSystemClock(void) {
 }
 
 static void ErrorHandler(void) {
-  while (1) {}
+  while (1) {
+  }
 }
