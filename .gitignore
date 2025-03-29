@@ -35,3 +35,4 @@ packagecache
 
 Cargo.lock
 /target/
+/.result/

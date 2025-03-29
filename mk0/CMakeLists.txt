@@ -52,16 +52,13 @@ add_link_options(
 )
 # link_libraries("-lc -lm -lnosys")
 
-# FreeRTOS 
+# FreeRTOS
 set(FREERTOS_PORT GCC_ARM_CM4F)
 set(FREERTOS_KERNEL_PATH ${CMAKE_SOURCE_DIR}/external/FreeRTOS/FreeRTOS/Source)
 
 add_library(freertos_config INTERFACE)
 target_include_directories(freertos_config INTERFACE ${CMAKE_SOURCE_DIR}/src/config)
 add_subdirectory(${FREERTOS_KERNEL_PATH} ${CMAKE_BINARY_DIR}/FreeRTOS-Kernel)
-
-# capnproto
-add_subdirectory(${CMAKE_SOURCE_DIR}/external/capnproto ${CMAKE_BINARY_DIR}/capnproto)
 
 # STM32CubeF4
 include(cmake/STM32CubeF4.cmake)
@@ -70,11 +67,20 @@ add_STM32CubeF4_library(stm32f4xx_hal
   ${CMAKE_SOURCE_DIR}/src/config
 )
 
+# nanopb
+set(NANOPB_SRC_ROOT_FOLDER ${CMAKE_SOURCE_DIR}/external/nanopb)
+set(NANOPB_GENERATOR_SOURCE_DIR ${NANOPB_SRC_ROOT_FOLDER}/generator)
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${NANOPB_SRC_ROOT_FOLDER}/extra)
+find_package(Nanopb REQUIRED)
+include_directories(${NANOPB_INCLUDE_DIRS})
+nanopb_generate_cpp(TARGET proto ${CMAKE_SOURCE_DIR}/proto/log.proto)
+
 # Application
 set(EXECUTABLE ${PROJECT_NAME}.elf)
 add_executable(${EXECUTABLE}
   src/main.cpp
   src/rtos_hooks.cpp
+  src/uart_stream.cpp
   src/drv/wm8960_stm32f4xx.cpp
   # src/tasks/play_sine_wave.cpp
   src/startup/startup_stm32f446xx.s
@@ -99,10 +105,10 @@ PRIVATE
 )
 target_link_libraries(${EXECUTABLE}
 PRIVATE
+  proto
   freertos_kernel
   freertos_config
   stm32f4xx_hal
-  capnproto
 )
 
 # POST-BUILD COMMANDS
