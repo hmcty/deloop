@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """Parses logging calls into a table of unique identifiers.
 
 Example usage:
@@ -19,7 +20,7 @@ import json
 import os
 import re
 
-MACRO_PATTERN = r'{MACROS}\s*\(\s*(".*?(?<!\\)")'
+MACRO_PATTERN = r'({MACROS})\s*\(\s*(".*?(?<!\\)")'
 
 
 def fnv1a_64(s: str) -> int:
@@ -55,7 +56,7 @@ def main(args: argparse.Namespace) -> None:
         with open(source_file, "r") as file:
             content = file.read()
             matches = macro_re.findall(content)
-            for match in matches:
+            for (_, match) in matches:
                 msg = match.strip('"')
                 log_table[fnv1a_64(msg)] = msg
 

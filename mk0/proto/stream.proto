@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+import "log.proto";
+
+message StreamPacket {
+  oneof payload {
+    LogEntry log = 1;
+    // Add more types here
+  }
+}

@@ -72,12 +72,23 @@ set(NANOPB_SRC_ROOT_FOLDER ${CMAKE_SOURCE_DIR}/external/nanopb)
 set(NANOPB_GENERATOR_SOURCE_DIR ${NANOPB_SRC_ROOT_FOLDER}/generator)
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${NANOPB_SRC_ROOT_FOLDER}/extra)
 find_package(Nanopb REQUIRED)
-include_directories(${NANOPB_INCLUDE_DIRS})
-nanopb_generate_cpp(TARGET proto ${CMAKE_SOURCE_DIR}/proto/log.proto)
+nanopb_generate_cpp(TARGET proto
+  ${CMAKE_SOURCE_DIR}/proto/log.proto
+  ${CMAKE_SOURCE_DIR}/proto/stream.proto
+)
+
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/python)
+add_custom_command(TARGET proto
+POST_BUILD
+COMMAND
+  protoc -I=${CMAKE_SOURCE_DIR}/proto --python_out=${CMAKE_SOURCE_DIR}/python
+  ${CMAKE_SOURCE_DIR}/proto/log.proto
+  ${CMAKE_SOURCE_DIR}/proto/stream.proto
+)
 
 # Application
 set(EXECUTABLE ${PROJECT_NAME}.elf)
-add_executable(${EXECUTABLE}
+set(SOURCES
   src/main.cpp
   src/rtos_hooks.cpp
   src/uart_stream.cpp
@@ -89,6 +100,7 @@ add_executable(${EXECUTABLE}
   src/board/stm32f4xx_hal_msp.c
   src/board/system_stm32f4xx.c
 )
+add_executable(${EXECUTABLE} ${SOURCES})
 target_include_directories(${EXECUTABLE}
 PRIVATE
   ${CMAKE_CURRENT_LIST_DIR}
@@ -106,6 +118,7 @@ PRIVATE
 target_link_libraries(${EXECUTABLE}
 PRIVATE
   proto
+  nanopb
   freertos_kernel
   freertos_config
   stm32f4xx_hal
@@ -118,4 +131,15 @@ POST_BUILD
   COMMAND ${CMAKE_OBJCOPY} -O binary ${EXECUTABLE} ${PROJECT_NAME}.bin
   COMMAND ${CMAKE_SIZE_UTIL} ${EXECUTABLE}
   COMMAND ${CMAKE_OBJDUMP} -d ${EXECUTABLE} > ${PROJECT_NAME}.lst
+)
+
+add_custom_command(TARGET ${EXECUTABLE}
+POST_BUILD
+COMMAND
+  ${CMAKE_SOURCE_DIR}/scripts/create_log_table.py
+  --output ${CMAKE_SOURCE_DIR}/python/log_table.json
+  # NOTE: This must match the logging macros described in `src/logging.hpp`.
+  --macro DELOOP_LOG_INFO
+  --source_files ${SOURCES}
+WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
 )

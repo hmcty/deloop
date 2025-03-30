@@ -8,31 +8,31 @@
 /.vscode
 
 __pycache__
-/.coverage/
-/.coveragerc
-/install dir
-/work area
+.coverage/
+.coveragerc
+install dir
+work area
 
-/meson-test-run.txt
-/meson-test-run.xml
-/meson-cross-test-run.txt
-/meson-cross-test-run.xml
+meson-test-run.txt
+meson-test-run.xml
+meson-cross-test-run.txt
+meson-cross-test-run.xml
 
 .DS_Store
 *~
 *.swp
 packagecache
-/MANIFEST
-/build
-/dist
-/meson.egg-info
+MANIFEST
+build
+dist
+meson.egg-info
 
-/docs/built_docs
-/docs/hotdoc-private*
+docs/built_docs
+docs/hotdoc-private*
 
 *.pyc
-/*venv*
+*venv*
 
 Cargo.lock
-/target/
-/.result/
+target/
+.result/
