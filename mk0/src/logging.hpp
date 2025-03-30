@@ -5,13 +5,11 @@
 #include <stdint.h>
 
 #define DELOOP_LOG_INFO(fmt, ...)                                              \
-  SubmitLog(LogLevel::INFO, FNV1A_64(#fmt), ##__VA_ARGS__)
+  deloop::SubmitLog(deloop::LogLevel::INFO, FNV1A_64(#fmt), ##__VA_ARGS__)
 #define DELOOP_LOG_WARNING(fmt, ...)                                           \
-  SubmitLog(LogLevel::WARNING, FNV1A_64(#fmt), ##__VA_ARGS__)
+  deloop::SubmitLog(deloop::LogLevel::WARNING, FNV1A_64(#fmt), ##__VA_ARGS__)
 #define DELOOP_LOG_ERROR(fmt, ...)                                             \
-  SubmitLog(LogLevel::ERROR, FNV1A_64(#fmt), ##__VA_ARGS__)
-
-enum class LogLevel { INFO, WARNING, ERROR };
+  deloop::SubmitLog(deloop::LogLevel::ERROR, FNV1A_64(#fmt), ##__VA_ARGS__)
 
 constexpr uint64_t FNV1A_64(const char *str) {
   if (str == nullptr) {
@@ -26,4 +24,9 @@ constexpr uint64_t FNV1A_64(const char *str) {
   return hash;
 }
 
+namespace deloop {
+
+enum class LogLevel { INFO, WARNING, ERROR };
 void SubmitLog(LogLevel level, const uint64_t id, ...);
+
+} // namespace deloop

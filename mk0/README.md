@@ -15,3 +15,12 @@ After building, you can open a GDB server with:
 ```sh
 ./scripts/debug.sh
 ```
+
+### With nix-shell
+
+```sh
+nix-shell
+mkdir build && cd build
+cmake -DCMAKE_TOOLCHAIN_FILE:PATH="cmake/arm-none-eabi-gcc.cmake" -DCMAKE_BUILD_TYPE=Debug ..
+make
+```

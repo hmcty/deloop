@@ -11,7 +11,7 @@ sys.path.append(str(Path(__file__).parent.parent / "scripts"))
 import create_log_table
 
 class TestCreateLogTable(unittest.TestCase):
-    
+
     @patch("builtins.open", new_callable=mock_open, read_data="")
     def test_no_macros_provided(self, mock_file):
         args = mock.Mock()
@@ -49,12 +49,24 @@ class TestCreateLogTable(unittest.TestCase):
         self._test_log_parsing_and_output(
             content="""
             DELOOP_LOG(
-                "Log message %d with %s",
+                "Log message %d with %s!",
                 42,  12 + 6,
                 10233213 + 9);
             """,
             macros=["DELOOP_LOG"],
-            expected_logs=["Log message %d with %s"],
+            expected_logs=["Log message %d with %s!"],
+        )
+
+    def test_multiple_macros(self):
+        self._test_log_parsing_and_output(
+            content="""
+            #define DELOOP_LOG(MSG, ...) printf(MSG, __VA_ARGS__)
+            #define OTHER_LOG(MSG, ...) printf(MSG, __VA_ARGS__)
+            DELOOP_LOG("Log message here");
+            OTHER_LOG("Another log message here");
+            """,
+            macros=["DELOOP_LOG", "OTHER_LOG"],
+            expected_logs=["Log message here", "Another log message here"],
         )
 
     def _test_log_parsing_and_output(
@@ -87,4 +99,3 @@ class TestCreateLogTable(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
-

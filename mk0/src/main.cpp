@@ -89,11 +89,12 @@ static void LEDBlinkTask(void *pvParameters) {
     HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_5);
     // HAL_Delay(500);
     // vTaskDelay(5000);
-    std::string hello = "Hello, World!\r\n";
-    HAL_UART_Transmit(
-        &UART_handle,
-        reinterpret_cast<uint8_t *>(const_cast<char *>(hello.c_str())),
-        hello.size(), 0xFFFFFFFF);
+    // std::string hello = "Hello, World!\r\n";
+    // HAL_UART_Transmit(
+    //     &UART_handle,
+    //     reinterpret_cast<uint8_t *>(const_cast<char *>(hello.c_str())),
+    //     hello.size(), 0xFFFFFFFF);
+    DELOOP_LOG_INFO("Hello, World!");
     vTaskDelay(5000);
   }
 }
