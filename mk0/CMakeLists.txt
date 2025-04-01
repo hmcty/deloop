@@ -50,8 +50,9 @@ add_link_options(
   -T${CMAKE_SOURCE_DIR}/src/linker/STM32F446RE_FLASH.ld
   -Wl,-Map=${PROJECT_NAME}.map,--cref
   -Wl,--gc-sections
+  -Wl,--print-memory-usage
+  -Wl,--wrap=malloc  # Wrap to throw an error if malloc is called.
 )
-# link_libraries("-lc -lm -lnosys")
 
 # FreeRTOS
 set(FREERTOS_PORT GCC_ARM_CM4F)
@@ -78,7 +79,6 @@ nanopb_generate_cpp(TARGET proto
   ${CMAKE_SOURCE_DIR}/proto/stream.proto
 )
 
-file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/python)
 add_custom_command(TARGET proto
 POST_BUILD
 COMMAND

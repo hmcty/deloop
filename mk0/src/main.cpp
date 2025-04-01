@@ -24,8 +24,6 @@ const size_t task_stack_size = configMINIMAL_STACK_SIZE * 2;
 static StaticTask_t task_buffer;
 static StackType_t task_stack[task_stack_size];
 
-static UART_HandleTypeDef UART_handle;
-
 int main(void) {
   // STM32F4xx HAL library initialization:
   //    - Configure the Flash prefetch and Buffer caches
@@ -85,6 +83,8 @@ int main(void) {
 //}
 
 static void LEDBlinkTask(void *pvParameters) {
+  (void)pvParameters;
+
   while (1) {
     HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_5);
     // HAL_Delay(500);

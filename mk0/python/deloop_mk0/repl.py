@@ -3,17 +3,18 @@
 import argparse
 import logging
 import threading
+from logging.handlers import QueueHandler
 from queue import Queue
 
 import cmd2
-from uart_stream import Mk0Stream, add_uart_args, open_uart_stream
-from utils import ColoredFormatter
+from deloop_mk0.uart_stream import Mk0Stream, add_uart_args, open_uart_stream
+from deloop_mk0.utils import ColoredFormatter
 
 logger = logging.getLogger()  # Root logger
 logger.setLevel(logging.DEBUG)
 
 log_queue = Queue()
-handler = logging.handlers.QueueHandler(log_queue)
+handler = QueueHandler(log_queue)
 logger.addHandler(handler)
 
 formatter = ColoredFormatter("%(asctime)s | %(levelname)8s | %(message)s")
@@ -35,7 +36,19 @@ class Mk0Cmd(cmd2.Cmd):
         self.register_preloop_hook(self._preloop_hook)
         self.register_postloop_hook(self._postloop_hook)
 
+        # Delete lots of the default commands
+        del cmd2.Cmd.do_edit
+        del cmd2.Cmd.do_shell
+        del cmd2.Cmd.do_alias
+        del cmd2.Cmd.do_macro
+        del cmd2.Cmd.do_run_pyscript
+        del cmd2.Cmd.do_run_script
+        del cmd2.Cmd.do_shortcuts
+        del cmd2.Cmd.do_set
+
     def do_enable_logs(self, _) -> None:
+        """Enable printing of logs from the device."""
+
         if self._log_thread.is_alive():
             print("Logs are already enabled.")
             return
@@ -45,7 +58,9 @@ class Mk0Cmd(cmd2.Cmd):
             self._log_thread = threading.Thread(target=self._log_thread_loop)
             self._log_thread.start()
 
-    def disable_logs(self, _) -> None:
+    def do_disable_logs(self, _) -> None:
+        """Enable printing of logs from the device."""
+
         self._stop_event.set()
         if self._log_thread.is_alive():
             self._log_thread.join()
@@ -71,22 +86,21 @@ class Mk0Cmd(cmd2.Cmd):
                         log_record = self._log_queue.get()
                         self.async_alert(log_record.getMessage())
 
-                    elif self.need_prompt_refresh:
-                        self.async_refresh_prompt()
-
                 finally:
                     self.terminal_lock.release()
 
             self._stop_event.wait(0.1)
 
 
-def main(args: argparse.Namespace) -> None:
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    add_uart_args(parser)
+    args = parser.parse_args()
+
     with open_uart_stream(args) as mk0_stream:
         cmd = Mk0Cmd(mk0_stream, log_queue)
         cmd.cmdloop()
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    add_uart_args(parser)
-    main(parser.parse_args())
+    main()

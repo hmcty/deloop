@@ -29,30 +29,9 @@ static struct {
 
   StaticTask_t task_info;
   StackType_t tack_stack[kTaskStackSize];
-} _state = {0};
+} _state;
 
-static void StreamTask(void *pvParameters) {
-  while (true) {
-    if (_state.initialized == false) {
-      vTaskDelay(1000);
-      continue;
-    }
-
-    StreamPacket packet = StreamPacket_init_zero;
-    if (xQueueReceive(_state.queue_handle, &packet, portMAX_DELAY) == pdTRUE) {
-      uint8_t buffer[StreamPacket_size + 2];
-      buffer[0] = 0xEB;
-      pb_ostream_t stream =
-          pb_ostream_from_buffer(buffer + 2, sizeof(buffer) - 2);
-      pb_encode(&stream, StreamPacket_fields, &packet);
-      buffer[1] = stream.bytes_written;
-
-      // Terminate the stream with a null character.
-      HAL_UART_Transmit(&_state.uart_handle, buffer, stream.bytes_written + 2,
-                        1000);
-    }
-  }
-}
+static void StreamTask(void *pvParameters);
 
 deloop::Error deloop::UartStream::Init() {
   if (_state.initialized) {
@@ -85,26 +64,24 @@ deloop::Error deloop::UartStream::Init() {
   return deloop::Error::kOk;
 }
 
-deloop::Error deloop::UartStream::Write(const uint8_t *data, uint16_t size) {
-  return deloop::Error::kOk;
-}
-
-static LogLevel ToPbLogLevel(deloop::LogLevel level) {
-  switch (level) {
-  case deloop::LogLevel::INFO:
-    return LogLevel_INFO;
-  case deloop::LogLevel::WARNING:
-    return LogLevel_WARNING;
-  case deloop::LogLevel::ERROR:
-    return LogLevel_ERROR;
-  }
-}
-
 void deloop::SubmitLog(deloop::LogLevel level, const uint64_t hash,
                        const std::array<LogArg, 4> &args) {
   LogRecord record = LogRecord_init_zero;
   record.hash = hash;
-  record.level = ToPbLogLevel(level);
+  switch (level) {
+  case deloop::LogLevel::INFO:
+    record.level = LogLevel_INFO;
+    break;
+  case deloop::LogLevel::WARNING:
+    record.level = LogLevel_WARNING;
+    break;
+  case deloop::LogLevel::ERROR:
+    record.level = LogLevel_ERROR;
+    break;
+  default:
+    record.level = LogLevel_INFO;
+    break;
+  }
 
   for (size_t i = 0; i < args.size(); i++) {
     LogRecord_Arg arg = LogRecord_Arg_init_zero;
@@ -125,6 +102,8 @@ void deloop::SubmitLog(deloop::LogLevel level, const uint64_t hash,
       arg.which_value = LogRecord_Arg_f32_tag;
       arg.value.f32 = args[i].value.f32;
       break;
+    default:
+      break;
     }
 
     record.args[i] = arg;
@@ -136,4 +115,29 @@ void deloop::SubmitLog(deloop::LogLevel level, const uint64_t hash,
   packet.payload.log = record;
 
   xQueueSend(_state.queue_handle, (void *)&packet, 1000);
+}
+
+static void StreamTask(void *pvParameters) {
+  (void)pvParameters;
+
+  while (true) {
+    if (_state.initialized == false) {
+      vTaskDelay(1000);
+      continue;
+    }
+
+    StreamPacket packet = StreamPacket_init_zero;
+    if (xQueueReceive(_state.queue_handle, &packet, portMAX_DELAY) == pdTRUE) {
+      uint8_t buffer[StreamPacket_size + 2];
+      buffer[0] = 0xEB;
+      pb_ostream_t stream =
+          pb_ostream_from_buffer(buffer + 2, sizeof(buffer) - 2);
+      pb_encode(&stream, StreamPacket_fields, &packet);
+      buffer[1] = (uint8_t)stream.bytes_written;
+
+      // Terminate the stream with a null character.
+      HAL_UART_Transmit(&_state.uart_handle, buffer,
+                        (uint16_t)stream.bytes_written + 2, 1000);
+    }
+  }
 }

@@ -16,6 +16,11 @@ After building, you can open a GDB server with:
 ./scripts/debug.sh
 ```
 
+Can open REPL with:
+
+```sh
+./result/
+
 ### With nix-shell
 
 ```sh

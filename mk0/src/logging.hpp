@@ -12,18 +12,10 @@
 
 #define DELOOP_LOG_INFO(fmt, ...)                                              \
   DELOOP_LOG(fmt, deloop::LogLevel::INFO, ##__VA_ARGS__)
-// #define DELOOP_LOG_WARNING(fmt, ...) DELOOP_LOG(fmt,
-// deloop::LogLevel::WARNING, ##__VA_ARGS__) #define DELOOP_LOG_ERROR(fmt, ...)
-// DELOOP_LOG(fmt, deloop::LogLevel::ERROR, ##__VA_ARGS__)
-
-// #define DELOOP_LOG_INFO(fmt, ...)                                              \
-//   deloop::SubmitLog(deloop::LogLevel::INFO, FNV1A_64(fmt), ##__VA_ARGS__)
-// #define DELOOP_LOG_WARNING(fmt, ...)                                           \
-//   deloop::SubmitLog(deloop::LogLevel::WARNING, FNV1A_64(fmt), ##__VA_ARGS__)
-// #define DELOOP_LOG_ERROR(fmt, ...)                                             \
-//   deloop::SubmitLog(deloop::LogLevel::ERROR, FNV1A_64(fmt), ##__VA_ARGS__)
-
-// std::array<deloop::LogArg, 4> args = deloop::CreateLogArgs(__VA_ARGS__);  \
+#define DELOOP_LOG_WARNING(fmt, ...)                                           \
+  DELOOP_LOG(fmt, deloop::LogLevel::WARNING, ##__VA_ARGS__)
+#define DELOOP_LOG_ERROR(fmt, ...)                                             \
+  DELOOP_LOG(fmt, deloop::LogLevel::ERROR, ##__VA_ARGS__)
 
 constexpr uint64_t FNV1A_64(std::string_view str) {
   uint64_t hash = 0xcbf29ce484222325;
@@ -67,12 +59,11 @@ constexpr LogArg ToLogArg(float value) {
 
 template <typename... Values>
 constexpr std::array<LogArg, 4> CreateLogArgs(Values... values) {
-  static_assert(sizeof...(values) <= 4, "Too many arguments for log message.");
+  static_assert(sizeof...(values) <= 4, "Only 4 arguments are supported.");
 
-  std::array<LogArg, 4> args = {LogArg{LogArg::Type::kUnset, {.u32 = 0}},
-                                LogArg{LogArg::Type::kUnset, {.u32 = 0}},
-                                LogArg{LogArg::Type::kUnset, {.u32 = 0}},
-                                LogArg{LogArg::Type::kUnset, {.u32 = 0}}};
+  std::array<LogArg, 4> args = {
+      LogArg{LogArg::Type::kUnset, {0}}, LogArg{LogArg::Type::kUnset, {0}},
+      LogArg{LogArg::Type::kUnset, {0}}, LogArg{LogArg::Type::kUnset, {0}}};
 
   int i = 0;
   ((args[i++] = ToLogArg(std::forward<Values>(values))), ...);

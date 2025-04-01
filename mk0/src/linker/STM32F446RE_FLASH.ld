@@ -51,7 +51,7 @@ SECTIONS
     . = ALIGN(4);
   } >ROM
 
-  .ARM.extab : 
+  .ARM.extab :
   {
     . = ALIGN(4);
     *(.ARM.extab* .gnu.linkonce.armextab.*)
@@ -67,7 +67,7 @@ SECTIONS
     . = ALIGN(4);
   } >ROM
 
-  .preinit_array : 
+  .preinit_array :
   {
     . = ALIGN(4);
     PROVIDE_HIDDEN (__preinit_array_start = .);
@@ -131,15 +131,18 @@ SECTIONS
   } >RAM
 
   /* User_heap_stack section, used to check that there is enough "RAM" Ram  type memory left */
-  ._user_heap_stack :
-  {
-    . = ALIGN(8);
-    PROVIDE ( end = . );
-    PROVIDE ( _end = . );
-    . = . + _Min_Heap_Size;
-    . = . + _Min_Stack_Size;
-    . = ALIGN(8);
-  } >RAM
+  /*
+   * NOTE: Heap disabled.
+   * ._user_heap_stack :
+   * {
+   *   . = ALIGN(8);
+   *   PROVIDE ( end = . );
+   *   PROVIDE ( _end = . );
+   *   . = . + _Min_Heap_Size;
+   *   . = . + _Min_Stack_Size;
+   *   . = ALIGN(8);
+   * } >RAM
+   */
 
   /* Remove information from the compiler libraries */
   /DISCARD/ :

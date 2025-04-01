@@ -59,7 +59,6 @@ def main(args: argparse.Namespace) -> None:
             matches = macro_re.findall(content)
             for (_, match) in matches:
                 msg = match.strip('"')
-                print(f"Found log message: {msg}")
                 log_table[fnv1a_64(msg)] = msg
 
     with open(args.output, "w") as output_file:
