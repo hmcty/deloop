@@ -24,13 +24,14 @@ MACRO_PATTERN = r'({MACROS})\s*\(\s*(".*?(?<!\\)")'
 
 
 def fnv1a_64(s: str) -> int:
-    FNV_OFFSET = 0xcbf29ce484222325
-    FNV_PRIME = 0x100000001b3
-    hash = FNV_OFFSET
-    for c in s.encode('utf-8'):
+    # NOTE: must match `src/logging.hpp`
+    hash = 0xcbf29ce484222325
+    for c in s.encode("utf-8"):
         hash ^= c
-        hash = (hash * FNV_PRIME) & (2**64 - 1)
-    return hash
+        hash *= 0x100000001b3
+        hash &= 0xFFFFFFFFFFFFFFFF
+
+    return hash & 0xFFFFFFFFFFFFFFFF
 
 
 def main(args: argparse.Namespace) -> None:
@@ -58,12 +59,14 @@ def main(args: argparse.Namespace) -> None:
             matches = macro_re.findall(content)
             for (_, match) in matches:
                 msg = match.strip('"')
+                print(f"Found log message: {msg}")
                 log_table[fnv1a_64(msg)] = msg
 
     with open(args.output, "w") as output_file:
         json.dump(log_table, output_file, indent=2)
 
     print(f"Wrote {len(log_table)} log calls to {args.output}")
+
 
 if __name__ == "__main__":
     arg_parser = argparse.ArgumentParser()

@@ -21,6 +21,7 @@ set(EXTRA_OPTIONS
   -fdata-sections
   -ffunction-sections
   -fno-exceptions
+  -finput-charset=UTF-8
 )
 set(OPTIMIZATION_OPTIONS
   $<$<CONFIG:Debug>:-Og>

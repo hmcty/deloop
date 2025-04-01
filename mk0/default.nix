@@ -13,9 +13,6 @@ pkgs.stdenv.mkDerivation rec {
     pkgs.python3
     pkgs.python3Packages.protobuf
     pkgs.python3Packages.grpcio-tools
-    pkgs.python3Packages.pyserial
-    pkgs.python3Packages.ipython
-    pkgs.python3Packages.tabulate
   ];
 
   configurePhase = ''

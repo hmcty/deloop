@@ -7,6 +7,7 @@ from google.protobuf import descriptor as _descriptor
 from google.protobuf import descriptor_pool as _descriptor_pool
 from google.protobuf import symbol_database as _symbol_database
 from google.protobuf.internal import builder as _builder
+
 # @@protoc_insertion_point(imports)
 
 _sym_db = _symbol_database.Default()
@@ -14,15 +15,17 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\tlog.proto\"\xae\x01\n\x08LogEntry\x12\x18\n\x05level\x18\x01 \x01(\x0e\x32\t.LogLevel\x12\x0c\n\x04tick\x18\x02 \x01(\r\x12\n\n\x02id\x18\x03 \x01(\r\x12\x11\n\x04\x61rg1\x18\x04 \x01(\rH\x00\x88\x01\x01\x12\x11\n\x04\x61rg2\x18\x05 \x01(\rH\x01\x88\x01\x01\x12\x11\n\x04\x61rg3\x18\x06 \x01(\rH\x02\x88\x01\x01\x12\x11\n\x04\x61rg4\x18\x07 \x01(\rH\x03\x88\x01\x01\x42\x07\n\x05_arg1B\x07\n\x05_arg2B\x07\n\x05_arg3B\x07\n\x05_arg4*R\n\x08LogLevel\x12\x0b\n\x07UNKNOWN\x10\x00\x12\t\n\x05\x44\x45\x42UG\x10\x01\x12\x08\n\x04INFO\x10\x02\x12\x0b\n\x07WARNING\x10\x03\x12\t\n\x05\x45RROR\x10\x04\x12\x0c\n\x08\x43RITICAL\x10\x05\x62\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\tlog.proto\"\x9c\x01\n\tLogRecord\x12\x18\n\x05level\x18\x01 \x01(\x0e\x32\t.LogLevel\x12\x0c\n\x04tick\x18\x02 \x01(\r\x12\x0c\n\x04hash\x18\x03 \x01(\x04\x12\x1c\n\x04\x61rgs\x18\x04 \x03(\x0b\x32\x0e.LogRecord.Arg\x1a;\n\x03\x41rg\x12\r\n\x03u32\x18\x01 \x01(\rH\x00\x12\r\n\x03i32\x18\x02 \x01(\x05H\x00\x12\r\n\x03\x66\x33\x32\x18\x03 \x01(\x02H\x00\x42\x07\n\x05value*R\n\x08LogLevel\x12\x0b\n\x07UNKNOWN\x10\x00\x12\t\n\x05\x44\x45\x42UG\x10\x01\x12\x08\n\x04INFO\x10\x02\x12\x0b\n\x07WARNING\x10\x03\x12\t\n\x05\x45RROR\x10\x04\x12\x0c\n\x08\x43RITICAL\x10\x05\x62\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'log_pb2', _globals)
 if _descriptor._USE_C_DESCRIPTORS == False:
   DESCRIPTOR._options = None
-  _globals['_LOGLEVEL']._serialized_start=190
-  _globals['_LOGLEVEL']._serialized_end=272
-  _globals['_LOGENTRY']._serialized_start=14
-  _globals['_LOGENTRY']._serialized_end=188
+  _globals['_LOGLEVEL']._serialized_start=172
+  _globals['_LOGLEVEL']._serialized_end=254
+  _globals['_LOGRECORD']._serialized_start=14
+  _globals['_LOGRECORD']._serialized_end=170
+  _globals['_LOGRECORD_ARG']._serialized_start=111
+  _globals['_LOGRECORD_ARG']._serialized_end=170
 # @@protoc_insertion_point(module_scope)
