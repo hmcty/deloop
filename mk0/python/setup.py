@@ -15,7 +15,7 @@ setup(
     py_modules=["log_pb2", "stream_pb2"],
     entry_points={
         "console_scripts": [
-            "deloop_mk0 = deloop_mk0.repl:main",
+            "deloop_mk0_repl = deloop_mk0.repl:main",
         ],
     },
 )
