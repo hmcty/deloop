@@ -95,7 +95,7 @@ static void LEDBlinkTask(void *pvParameters) {
     //     reinterpret_cast<uint8_t *>(const_cast<char *>(hello.c_str())),
     //     hello.size(), 0xFFFFFFFF);
     //
-    DELOOP_LOG_INFO("Hello world: %.2f, %d", 3.14f, 42);
+    DELOOP_LOG_INFO("Hello world new: %.2f, %d", 3.14f, 42);
     vTaskDelay(5000);
   }
 }
