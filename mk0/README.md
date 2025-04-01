@@ -16,10 +16,12 @@ After building, you can open a GDB server with:
 ./scripts/debug.sh
 ```
 
-Can open REPL with:
+To communicate with the board, you can use the REPL:
 
 ```sh
-./result/
+./result/bin/deloop_mk0_repl
+mk0> help
+```
 
 ### With nix-shell
 
