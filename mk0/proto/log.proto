@@ -9,13 +9,17 @@ enum LogLevel {
   CRITICAL = 5;
 }
 
-message LogEntry {
+message LogRecord {
   LogLevel level = 1;
   uint32 tick = 2;
-  uint32 id = 3;
-  optional uint32 arg1 = 4; 
-  optional uint32 arg2 = 5;
-  optional uint32 arg3 = 6;
-  optional uint32 arg4 = 7;
-}
+  uint64 hash = 3;
 
+  message Arg {
+    oneof value {
+      uint32 u32 = 1;
+      int32 i32 = 2;
+      float f32 = 3;
+    }
+  }
+  repeated Arg args = 4;
+}

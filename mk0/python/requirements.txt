@@ -1,0 +1,5 @@
+pyserial
+protobuf
+grpcio-tools
+cmd2
+tabulate

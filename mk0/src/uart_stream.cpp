@@ -24,7 +24,7 @@ static struct {
   UART_HandleTypeDef uart_handle;
 
   StaticQueue_t queue_info;
-  uint8_t queue_buffer[kQueueSize * sizeof(StreamPacket)];
+  uint8_t queue_buffer[kQueueSize * StreamPacket_size];
   QueueHandle_t queue_handle;
 
   StaticTask_t task_info;
@@ -40,13 +40,15 @@ static void StreamTask(void *pvParameters) {
 
     StreamPacket packet = StreamPacket_init_zero;
     if (xQueueReceive(_state.queue_handle, &packet, portMAX_DELAY) == pdTRUE) {
-      uint8_t buffer[StreamPacket_size + 1];
-      pb_ostream_t stream = pb_ostream_from_buffer(buffer, sizeof(buffer));
+      uint8_t buffer[StreamPacket_size + 2];
+      buffer[0] = 0xEB;
+      pb_ostream_t stream =
+          pb_ostream_from_buffer(buffer + 2, sizeof(buffer) - 2);
       pb_encode(&stream, StreamPacket_fields, &packet);
+      buffer[1] = stream.bytes_written;
 
       // Terminate the stream with a null character.
-      buffer[stream.bytes_written] = '\0';
-      HAL_UART_Transmit(&_state.uart_handle, buffer, stream.bytes_written + 1,
+      HAL_UART_Transmit(&_state.uart_handle, buffer, stream.bytes_written + 2,
                         1000);
     }
   }
@@ -87,14 +89,51 @@ deloop::Error deloop::UartStream::Write(const uint8_t *data, uint16_t size) {
   return deloop::Error::kOk;
 }
 
-void deloop::SubmitLog(LogLevel level, const uint64_t id, ...) {
-  LogEntry entry = LogEntry_init_zero;
-  // entry.level = level;
-  entry.id = id;
+static LogLevel ToPbLogLevel(deloop::LogLevel level) {
+  switch (level) {
+  case deloop::LogLevel::INFO:
+    return LogLevel_INFO;
+  case deloop::LogLevel::WARNING:
+    return LogLevel_WARNING;
+  case deloop::LogLevel::ERROR:
+    return LogLevel_ERROR;
+  }
+}
+
+void deloop::SubmitLog(deloop::LogLevel level, const uint64_t hash,
+                       const std::array<LogArg, 4> &args) {
+  LogRecord record = LogRecord_init_zero;
+  record.hash = hash;
+  record.level = ToPbLogLevel(level);
+
+  for (size_t i = 0; i < args.size(); i++) {
+    LogRecord_Arg arg = LogRecord_Arg_init_zero;
+    if (args[i].type == deloop::LogArg::Type::kUnset) {
+      break;
+    }
+
+    switch (args[i].type) {
+    case deloop::LogArg::Type::kU32:
+      arg.which_value = LogRecord_Arg_u32_tag;
+      arg.value.u32 = args[i].value.u32;
+      break;
+    case deloop::LogArg::Type::kI32:
+      arg.which_value = LogRecord_Arg_i32_tag;
+      arg.value.i32 = args[i].value.i32;
+      break;
+    case deloop::LogArg::Type::kF32:
+      arg.which_value = LogRecord_Arg_f32_tag;
+      arg.value.f32 = args[i].value.f32;
+      break;
+    }
+
+    record.args[i] = arg;
+    record.args_count++;
+  }
 
   StreamPacket packet = StreamPacket_init_zero;
   packet.which_payload = StreamPacket_log_tag;
-  packet.payload.log = entry;
+  packet.payload.log = record;
 
   xQueueSend(_state.queue_handle, (void *)&packet, 1000);
 }
