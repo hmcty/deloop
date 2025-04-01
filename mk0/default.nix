@@ -1,10 +1,28 @@
 { pkgs ? import (fetchTarball "https://github.com/NixOS/nixpkgs/archive/8b27c1239e5c421a2bbc2c65d52e4a6fbf2ff296.tar.gz") {} }:
 
 let
+  fs = pkgs.lib.fileset;
   mk0-dev = pkgs.stdenv.mkDerivation rec {
     pname = "deloop-mk0-dev";
     version = "0.1.0";
-    src = ./.;
+    src = fs.toSource {
+      root = ./.;
+      fileset = fs.unions [
+        ./CMakeLists.txt
+        ./scripts/create_log_table.py
+        ./cmake
+        ./external
+        ./proto
+        (fs.fileFilter
+          (file: file.hasExt "c"
+                 || file.hasExt "cpp"
+                 || file.hasExt "h"
+                 || file.hasExt "hpp"
+                 || file.hasExt "ld"
+                 || file.hasExt "s")
+          ./src)
+      ];
+    };
 
     buildInputs = [
       pkgs.cmake
@@ -43,7 +61,12 @@ let
   mk0-app = pkgs.python3Packages.buildPythonApplication {
     pname = "deloop-mk0-app";
     version = "0.1.0";
-    src = pkgs.lib.cleanSource ./python;
+    src = fs.toSource {
+      root = ./python;
+      fileset = fs.unions [
+        (fs.fileFilter (file: file.hasExt "py") ./python/.)
+      ];
+    };
 
     buildInputs = [ mk0-dev ];
 

@@ -79,6 +79,7 @@ nanopb_generate_cpp(TARGET proto
   ${CMAKE_SOURCE_DIR}/proto/stream.proto
 )
 
+file(MAKE_DIRECTORY ${CMAKE_SOURCE_DIR}/python)
 add_custom_command(TARGET proto
 POST_BUILD
 COMMAND
