@@ -1,6 +1,6 @@
 #include "stm32f4xx_hal.h"
-#include "stm32f4xx_hal_i2s.h"
 #include "stm32f4xx_hal_dma.h"
+#include "stm32f4xx_hal_i2s.h"
 
 /*
 #define USARTx                           USART3
@@ -19,20 +19,20 @@
 #define USARTx_RX_AF                     GPIO_AF7_USART3
 */
 
-#define USARTx                           USART2
-#define USARTx_CLK_ENABLE()              __HAL_RCC_USART2_CLK_ENABLE();
-#define USARTx_RX_GPIO_CLK_ENABLE()      __HAL_RCC_GPIOA_CLK_ENABLE()
-#define USARTx_TX_GPIO_CLK_ENABLE()      __HAL_RCC_GPIOA_CLK_ENABLE()
+#define USARTx USART2
+#define USARTx_CLK_ENABLE() __HAL_RCC_USART2_CLK_ENABLE();
+#define USARTx_RX_GPIO_CLK_ENABLE() __HAL_RCC_GPIOA_CLK_ENABLE()
+#define USARTx_TX_GPIO_CLK_ENABLE() __HAL_RCC_GPIOA_CLK_ENABLE()
 
-#define USARTx_FORCE_RESET()             __HAL_RCC_USART2_FORCE_RESET()
-#define USARTx_RELEASE_RESET()           __HAL_RCC_USART2_RELEASE_RESET()
+#define USARTx_FORCE_RESET() __HAL_RCC_USART2_FORCE_RESET()
+#define USARTx_RELEASE_RESET() __HAL_RCC_USART2_RELEASE_RESET()
 
-#define USARTx_TX_PIN                    GPIO_PIN_2
-#define USARTx_TX_GPIO_PORT              GPIOA
-#define USARTx_TX_AF                     GPIO_AF7_USART2
-#define USARTx_RX_PIN                    GPIO_PIN_3
-#define USARTx_RX_GPIO_PORT              GPIOA
-#define USARTx_RX_AF                     GPIO_AF7_USART2
+#define USARTx_TX_PIN GPIO_PIN_2
+#define USARTx_TX_GPIO_PORT GPIOA
+#define USARTx_TX_AF GPIO_AF7_USART2
+#define USARTx_RX_PIN GPIO_PIN_3
+#define USARTx_RX_GPIO_PORT GPIOA
+#define USARTx_RX_AF GPIO_AF7_USART2
 
 void HAL_MspInit(void) {
   // Ensure all priority bits are assigned as preemption priority bits.
@@ -103,6 +103,8 @@ void HAL_I2C_MspDeInit(I2C_HandleTypeDef *hi2c) {
 }
 
 void HAL_UART_MspInit(UART_HandleTypeDef *huart) {
+  (void)huart;
+
   GPIO_InitTypeDef GPIO_InitStruct;
 
   // Enable GPIO TX/RX clock
@@ -126,25 +128,27 @@ void HAL_UART_MspInit(UART_HandleTypeDef *huart) {
   HAL_GPIO_Init(USARTx_RX_GPIO_PORT, &GPIO_InitStruct);
 
   // Enable DMA clock
-//__HAL_RCC_DMA1_CLK_ENABLE();
+  //__HAL_RCC_DMA1_CLK_ENABLE();
 
-//// Configure the DMA handler for transmission process
-//static DMA_HandleTypeDef hdma_tx;
-//hdma_tx.Instance = DMA1_Stream6;
-//hdma_tx.Init.Channel = DMA1_Channel7;
-//hdma_tx.Init.Direction = DMA_MEMORY_TO_PERIPH;
-//hdma_tx.Init.PeriphInc = DMA_PINC_DISABLE;
-//hdma_tx.Init.MemInc = DMA_MINC_ENABLE;
-//hdma_tx.Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;
-//hdma_tx.Init.MemDataAlignment = DMA_MDATAALIGN_BYTE;
-//hdma_tx.Init.Mode = DMA_NORMAL;
-//hdma_tx.Init.Priority = DMA_PRIORITY_LOW;
-//HAL_DMA_Init(&hdma_tx);
+  //// Configure the DMA handler for transmission process
+  // static DMA_HandleTypeDef hdma_tx;
+  // hdma_tx.Instance = DMA1_Stream6;
+  // hdma_tx.Init.Channel = DMA1_Channel7;
+  // hdma_tx.Init.Direction = DMA_MEMORY_TO_PERIPH;
+  // hdma_tx.Init.PeriphInc = DMA_PINC_DISABLE;
+  // hdma_tx.Init.MemInc = DMA_MINC_ENABLE;
+  // hdma_tx.Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;
+  // hdma_tx.Init.MemDataAlignment = DMA_MDATAALIGN_BYTE;
+  // hdma_tx.Init.Mode = DMA_NORMAL;
+  // hdma_tx.Init.Priority = DMA_PRIORITY_LOW;
+  // HAL_DMA_Init(&hdma_tx);
 
-//__HAL_LINKDMA(huart, hdmatx, hdma_tx);
+  //__HAL_LINKDMA(huart, hdmatx, hdma_tx);
 }
 
 void HAL_UART_MspDeInit(UART_HandleTypeDef *huart) {
+  (void)huart;
+
   USARTx_FORCE_RESET();
   USARTx_RELEASE_RESET();
 

@@ -1,20 +1,26 @@
 """Handles a UART stream for Mk0 devices."""
 
 import argparse
+import importlib
 import json
 import logging
 from contextlib import contextmanager
-from pathlib import Path
 from typing import Final, Generator
 
-import log_pb2
 import serial
-import stream_pb2
 from serial.threaded import Protocol, ReaderThread
 from serial.tools import list_ports
 from tabulate import tabulate
 
-LOG_TABLE_FILE: Final[Path] = Path(__file__).parent / "log_table.json"
+try:
+    import log_pb2
+    import stream_pb2
+except ImportError as e:
+    print(e)
+    print("Missing protobuf modules. Run build script.")
+    raise SystemExit
+
+LOG_TABLE_FILE = importlib.resources.files("deloop_mk0") / "log_table.json"
 
 logger = logging.getLogger(__name__)
 
