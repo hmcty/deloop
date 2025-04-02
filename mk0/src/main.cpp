@@ -18,7 +18,7 @@
 
 static void ConfigureSystemClock(void);
 static void ErrorHandler(void);
-static void LEDBlinkTask(void *pvParameters);
+static void CoreLoopTask(void *pvParameters);
 
 const size_t task_stack_size = configMINIMAL_STACK_SIZE * 2;
 static StaticTask_t task_buffer;
@@ -52,51 +52,30 @@ int main(void) {
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
   HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_RESET);
 
-  xTaskCreateStatic(LEDBlinkTask, "Task 1", task_stack_size, NULL, 1,
+  xTaskCreateStatic(CoreLoopTask, "Core Loop", task_stack_size, NULL, 1,
                     &(task_stack[0]), &task_buffer);
-
-  // if (WM8960::Init() != 0) {
-  //   ErrorHandler();
-  // }
   // AddSineWaveTask();
+
+  err = deloop::WM8960::Init();
+  if (err != deloop::Error::kOk) {
+    DELOOP_LOG_ERROR("Failed to initialize WM8960: %d", err);
+  }
 
   // Start the FreeRTOS scheduler.
   vTaskStartScheduler();
 
-  // Infinite loop
+  // Infinite loop. We should never get here.
   while (1) {
-    // HAL_UART_Transmit(
-    //   &UART_handle,
-    //   reinterpret_cast<uint8_t *>(const_cast<char *>(hello.c_str())),
-    //   hello.size(),
-    //   0xFFFFFFFF);
-    // HAL_Delay(1000);
   }
 }
 
-// int __io_putchar(int ch) {
-//   /* Place your implementation of fputc here */
-//   /* e.g. write a character to the USART3 and Loop until the end of
-//   transmission */ HAL_UART_Transmit(&UART_handle, (uint8_t *)&ch, 1, 0xFFFF);
-
-//  return ch;
-//}
-
-static void LEDBlinkTask(void *pvParameters) {
+static void CoreLoopTask(void *pvParameters) {
   (void)pvParameters;
 
   while (1) {
     HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_5);
-    // HAL_Delay(500);
-    // vTaskDelay(5000);
-    // std::string hello = "Hello, World!\r\n";
-    // HAL_UART_Transmit(
-    //     &UART_handle,
-    //     reinterpret_cast<uint8_t *>(const_cast<char *>(hello.c_str())),
-    //     hello.size(), 0xFFFFFFFF);
-    //
     DELOOP_LOG_INFO("Hello world new: %.2f, %d", 3.14f, 42);
-    vTaskDelay(5000);
+    vTaskDelay(10000);
   }
 }
 

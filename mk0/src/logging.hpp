@@ -4,6 +4,8 @@
 #include <cstdint>
 #include <string_view>
 
+#include "errors.hpp"
+
 #define DELOOP_LOG(fmt, level, ...)                                            \
   do {                                                                         \
     std::array<deloop::LogArg, 4> args = deloop::CreateLogArgs(__VA_ARGS__);   \
@@ -55,6 +57,10 @@ constexpr LogArg ToLogArg(int value) {
 
 constexpr LogArg ToLogArg(float value) {
   return LogArg{deloop::LogArg::Type::kF32, {.f32 = value}};
+}
+
+constexpr LogArg ToLogArg(deloop::Error value) {
+  return LogArg{LogArg::Type::kI32, {.i32 = static_cast<int32_t>(value)}};
 }
 
 template <typename... Values>
