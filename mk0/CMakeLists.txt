@@ -141,7 +141,7 @@ COMMAND
   ${CMAKE_SOURCE_DIR}/scripts/create_log_table.py
   --output ${CMAKE_SOURCE_DIR}/python/log_table.json
   # NOTE: This must match the logging macros described in `src/logging.hpp`.
-  --macro DELOOP_LOG_INFO
+  --macro DELOOP_LOG_INFO DELOOP_LOG_WARNING DELOOP_LOG_ERROR
   --source_files ${SOURCES}
 WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
 )
