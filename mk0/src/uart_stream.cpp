@@ -114,7 +114,7 @@ void deloop::SubmitLog(deloop::LogLevel level, const uint64_t hash,
   packet.which_payload = StreamPacket_log_tag;
   packet.payload.log = record;
 
-  xQueueSend(_state.queue_handle, (void *)&packet, 1000);
+  xQueueSendToBack(_state.queue_handle, (void *)&packet, 1000);
 }
 
 static void StreamTask(void *pvParameters) {
@@ -130,6 +130,7 @@ static void StreamTask(void *pvParameters) {
     if (xQueueReceive(_state.queue_handle, &packet, portMAX_DELAY) == pdTRUE) {
       uint8_t buffer[StreamPacket_size + 2];
       buffer[0] = 0xEB;
+      // TODO: Checksum + escape for start byte.
       pb_ostream_t stream =
           pb_ostream_from_buffer(buffer + 2, sizeof(buffer) - 2);
       pb_encode(&stream, StreamPacket_fields, &packet);
