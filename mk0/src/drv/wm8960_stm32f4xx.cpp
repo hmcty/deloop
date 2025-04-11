@@ -6,6 +6,7 @@
 #include "stm32f4xx_hal.h"
 #include "stm32f4xx_hal_i2c.h"
 #include "stm32f4xx_hal_i2s.h"
+#include "stm32f4xx_hal_i2s_ex.h"
 
 #include "errors.hpp"
 #include "logging.hpp"
@@ -24,17 +25,19 @@ deloop::Error deloop::WM8960::Init() {
   DELOOP_LOG_INFO("[WM8960] Initializing...");
   memset(&_state, 0, sizeof(_state));
 
-  i2s_handle.Instance = SPI2; // TODO: Allow for usage of other SPI peripherals.
-  i2s_handle.Init.Mode = I2S_MODE_MASTER_TX;
-  i2s_handle.Init.Standard = I2S_STANDARD_PHILIPS;
-  i2s_handle.Init.DataFormat = I2S_DATAFORMAT_16B;
-  i2s_handle.Init.MCLKOutput = I2S_MCLKOUTPUT_ENABLE;
-  i2s_handle.Init.AudioFreq = I2S_AUDIOFREQ_48K;
-  i2s_handle.Init.CPOL = I2S_CPOL_LOW;
-  i2s_handle.Init.ClockSource = I2S_CLOCK_PLL;
-  i2s_handle.Init.FullDuplexMode = I2S_FULLDUPLEXMODE_DISABLE;
-  if (HAL_I2S_Init(&i2s_handle) != HAL_OK) {
-    DELOOP_LOG_ERROR("[WM8960] Failed to initialize I2S peripheral.");
+
+  // Initialize I2S.
+  _state.i2s_handle.Instance = SPI2; // TODO: Allow for usage of other SPI peripherals.
+  _state.i2s_handle.Init.Mode = I2S_MODE_MASTER_TX;
+  _state.i2s_handle.Init.Standard = I2S_STANDARD_PHILIPS;
+  _state.i2s_handle.Init.DataFormat = I2S_DATAFORMAT_24B;
+  _state.i2s_handle.Init.MCLKOutput = I2S_MCLKOUTPUT_ENABLE;
+  _state.i2s_handle.Init.AudioFreq = I2S_AUDIOFREQ_48K;
+  _state.i2s_handle.Init.CPOL = I2S_CPOL_LOW;
+  _state.i2s_handle.Init.ClockSource = I2S_CLOCK_PLL;
+  _state.i2s_handle.Init.FullDuplexMode = I2S_FULLDUPLEXMODE_ENABLE;
+  if (HAL_I2S_Init(&_state.i2s_handle) != HAL_OK) {
+    DELOOP_LOG_ERROR("[WM8960] Failed to initialize I2S peripheral: %d", (uint32_t) HAL_I2S_GetError(&_state.i2s_handle));
     return deloop::Error::kFailedToInitializePeripheral;
   }
 
@@ -59,20 +62,47 @@ deloop::Error deloop::WM8960::Init() {
 
 deloop::Error deloop::WM8960::ResetToDefaults(void) {
   DELOOP_LOG_INFO("[WM8960] Resetting to defaults...");
+
+  // Any write to the reset register will set all others to default.
+  DELOOP_RETURN_IF_ERROR(deloop::WM8960::WriteRegister(WM8960_REG_ADDR_RESET, 0x01));
+
+  // Configure VMID divider for playback+recording, enable VREF (required for
+  // ADC/DAC), and power on L/R ADCs.
   DELOOP_RETURN_IF_ERROR(deloop::WM8960::WriteRegister(
-      WM8960_REG_ADDR_POWER_MGMT_3,
-      WM8960_REG_MASK_POWER_MGMT_3_LOMIX | WM8960_REG_MASK_POWER_MGMT_3_ROMIX));
+    WM8960_REG_ADDR_POWER_MGMT_1,
+    WM8960_REG_FLAG_POWER_MGMT_1_VMIDSEL_50kOhm |
+    WM8960_REG_FLAG_POWER_MGMT_1_VREF_ON |
+    WM8960_REG_FLAG_POWER_MGMT_1_AINL_ON |
+    WM8960_REG_FLAG_POWER_MGMT_1_AINR_ON |
+    WM8960_REG_FLAG_POWER_MGMT_1_ADCL_ON |
+    WM8960_REG_FLAG_POWER_MGMT_1_ADCR_ON));
+
+  // TODO: Configure POWER_MGMT_2 here for DAC support.
+
   DELOOP_RETURN_IF_ERROR(deloop::WM8960::WriteRegister(
-      WM8960_REG_ADDR_LEFT_MIXER_CTL, WM8960_REG_MASK_LEFT_MIXER_CTL_LD2LO));
-  DELOOP_RETURN_IF_ERROR(deloop::WM8960::WriteRegister(
-      WM8960_REG_ADDR_RIGHT_MIXER_CTL, WM8960_REG_MASK_RIGHT_MIXER_CTL_RD2RO));
-  DELOOP_RETURN_IF_ERROR(deloop::WM8960::WriteRegister(
-      WM8960_REG_ADDR_POWER_MGMT_2, WM8960_REG_MASK_POWER_MGMT_2_SPKR |
-                                        WM8960_REG_MASK_POWER_MGMT_2_SPKL |
-                                        WM8960_REG_MASK_POWER_MGMT_2_ROUT1 |
-                                        WM8960_REG_MASK_POWER_MGMT_2_LOUT1 |
-                                        WM8960_REG_MASK_POWER_MGMT_2_DACL |
-                                        WM8960_REG_MASK_POWER_MGMT_2_DACR));
+    WM8960_REG_ADDR_POWER_MGMT_3,
+    WM8960_REG_FLAG_POWER_MGMT_3_LMIC_ON |
+    WM8960_REG_FLAG_POWER_MGMT_3_RMIC_ON));
+
+  // DELOOP_RETURN_IF_ERROR(deloop::WM8960::WriteRegister(
+  //     WM8960_REG_ADDR_POWER_MGMT_3,
+  //     WM8960_REG_MASK_POWER_MGMT_3_LOMIX |
+  //     WM8960_REG_MASK_POWER_MGMT_3_ROMIX));
+  // DELOOP_RETURN_IF_ERROR(deloop::WM8960::WriteRegister(
+  //     WM8960_REG_ADDR_LEFT_MIXER_CTL, WM8960_REG_MASK_LEFT_MIXER_CTL_LD2LO));
+  // DELOOP_RETURN_IF_ERROR(deloop::WM8960::WriteRegister(
+  //     WM8960_REG_ADDR_RIGHT_MIXER_CTL,
+  //     WM8960_REG_MASK_RIGHT_MIXER_CTL_RD2RO));
+  // DELOOP_RETURN_IF_ERROR(deloop::WM8960::WriteRegister(
+  //     WM8960_REG_ADDR_POWER_MGMT_2,
+  //     (WM8960_REG_MASK_POWER_MGMT_2_SPKR | WM8960_REG_MASK_POWER_MGMT_2_SPKL
+  //     |
+  //      WM8960_REG_MASK_POWER_MGMT_2_ROUT1 |
+  //      WM8960_REG_MASK_POWER_MGMT_2_LOUT1 | WM8960_REG_MASK_POWER_MGMT_2_DACL
+  //      | WM8960_REG_MASK_POWER_MGMT_2_DACR)));
+
+  HAL_I2S_DMAResume(&_state.i2s_handle);
+
   return deloop::Error::kOk;
 }
 
@@ -98,6 +128,26 @@ deloop::Error deloop::WM8960::WriteRegister(uint8_t reg_addr, uint16_t data) {
     return deloop::Error::kI2cTimeoutOnWrite;
   default:
     return deloop::Error::kI2cHalWriteError;
+  }
+}
+
+deloop::Error deloop::WM8960::ExchangeData(uint16_t *tx, uint16_t *rx, uint16_t size) {
+  if (!_state.initialized) {
+    return deloop::Error::kNotInitialized;
+  }
+
+  auto status = HAL_I2SEx_TransmitReceive_DMA(&_state.i2s_handle, tx, rx, size);
+  switch (status) {
+  case HAL_OK:
+    return deloop::Error::kOk;
+  case HAL_BUSY:
+    return deloop::Error::kI2sBusy;
+  case HAL_ERROR:
+    return deloop::Error::kI2sHalError;
+  case HAL_TIMEOUT:
+    return deloop::Error::kI2sTimeout;
+  default:
+    return deloop::Error::kI2sHalError;
   }
 }
 

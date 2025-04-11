@@ -72,10 +72,37 @@ int main(void) {
 static void CoreLoopTask(void *pvParameters) {
   (void)pvParameters;
 
+  uint16_t tx_data[4] = {0x1234, 0x5678, 0x01, 0x01};
+  uint16_t data[4] = {0};
+  uint32_t avg_left = 0;
+  uint32_t avg_right = 0;
+  uint32_t num_ticks = 0;
   while (1) {
-    HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_5);
-    DELOOP_LOG_INFO("Hello world new: %.2f, %d", 3.14f, 42);
-    vTaskDelay(10000);
+    // HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_5);
+    // DELOOP_LOG_INFO("Hello world new: %.2f, %d", 3.14f, 42);
+    // auto error = deloop::WM8960::WriteData(data, 2);
+    // if (error != deloop::Error::kOk) {
+    //   DELOOP_LOG_ERROR("Failed to write data: %d", error);
+    // }
+    // deloop::WM8960::WriteData(data, 2);
+    auto error = deloop::WM8960::ExchangeData(tx_data, data, 4);
+    if (error != deloop::Error::kOk) {
+      DELOOP_LOG_ERROR("Failed to read data: %d", error);
+    }
+
+    // uint32_t left = (data[0] << 16) | data[1];
+    // uint32_t right = (data[2] << 16) | data[3];
+    // avg_left = (avg_left * 3 + left) / 4;
+    // avg_right = (avg_right * 3 + right) / 4;
+    num_ticks++;
+    if (num_ticks > 100000) {
+      DELOOP_LOG_INFO("%d %d %d %d", data[0], data[1], data[2], data[3]);
+      avg_left = 0;
+      avg_right = 0;
+      num_ticks = 0;
+    }
+
+    // vTaskDelay(100);
   }
 }
 
