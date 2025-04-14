@@ -7,5 +7,6 @@
   "16928921907232488655": "[WM8960] Initializing...",
   "6548555532949662929": "[WM8960] Failed to initialize I2S peripheral: %d",
   "8010726201827881308": "[WM8960] Failed to initialize I2C peripheral.",
+  "755622758604016128": "[WM8960] Failed to initialize SAI peripheral: %d",
   "12009604518402858070": "[WM8960] Resetting to defaults..."
 }

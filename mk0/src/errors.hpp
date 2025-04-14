@@ -24,10 +24,10 @@ enum class Error : int32_t {
   kI2cHalWriteError = -6,
   kI2cTimeoutOnWrite = -7,
 
-  // I2S
-  kI2sBusy = -8,
-  kI2sHalError = -9,
-  kI2sTimeout = -10,
+  // SAI
+  kSaiBusy = -8,
+  kSaiHalError = -9,
+  kSaiTimeout = -10,
 };
 
 } // namespace deloop
