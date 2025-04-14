@@ -1,9 +1,5 @@
 {
   "966162262948479881": "Failed to initialize WM8960: %d",
-  "9003803528379732465": "Hello world new: %.2f, %d",
-  "288409577726133181": "Failed to write data: %d",
-  "12989150278597174458": "Failed to read data: %d",
-  "17323394739656555195": "%d %d %d %d",
   "16928921907232488655": "[WM8960] Initializing...",
   "6548555532949662929": "[WM8960] Failed to initialize I2S peripheral: %d",
   "8010726201827881308": "[WM8960] Failed to initialize I2C peripheral.",

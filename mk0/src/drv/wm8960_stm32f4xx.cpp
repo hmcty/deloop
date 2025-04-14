@@ -76,27 +76,12 @@ deloop::Error deloop::WM8960::Init() {
   _state.sai_tx_handle.Init.ClockSource = SAI_CLKSOURCE_PLLSAI;
   // _state.sai_tx_handle.Init.AudioFrequency = SAI_AUDIO_FREQUENCY_48K;
   _state.sai_tx_handle.Init.AudioFrequency = SAI_AUDIO_FREQUENCY_22K;
-  _state.sai_tx_handle.Init.Protocol = SAI_FREE_PROTOCOL;
-  _state.sai_tx_handle.Init.DataSize = SAI_DATASIZE_16;
-  _state.sai_tx_handle.Init.FirstBit = SAI_FIRSTBIT_MSB;
-  _state.sai_tx_handle.Init.ClockStrobing = SAI_CLOCKSTROBING_RISINGEDGE;
+  // _state.sai_tx_handle.Init.Protocol = SAI_FREE_PROTOCOL;
+  // _state.sai_tx_handle.Init.DataSize = SAI_DATASIZE_24;
+  // _state.sai_tx_handle.Init.FirstBit = SAI_FIRSTBIT_MSB;
+  // _state.sai_tx_handle.Init.ClockStrobing = SAI_CLOCKSTROBING_RISINGEDGE;
 
-//_state.sai_tx_handle.FrameInit.FrameLength       = 32;
-//_state.sai_tx_handle.FrameInit.ActiveFrameLength = 16;
-//_state.sai_tx_handle.FrameInit.FSDefinition      = SAI_FS_CHANNEL_IDENTIFICATION;
-//_state.sai_tx_handle.FrameInit.FSPolarity        = SAI_FS_ACTIVE_LOW;
-//_state.sai_tx_handle.FrameInit.FSOffset          = SAI_FS_BEFOREFIRSTBIT;
-
-//_state.sai_tx_handle.SlotInit.FirstBitOffset = 1;
-//_state.sai_tx_handle.SlotInit.SlotSize       = SAI_SLOTSIZE_DATASIZE;
-//_state.sai_tx_handle.SlotInit.SlotNumber     = 2;
-//_state.sai_tx_handle.SlotInit.SlotActive     = (SAI_SLOTACTIVE_0 | SAI_SLOTACTIVE_1);
-
-//if (HAL_SAI_Init(&_state.sai_tx_handle) != HAL_OK) {
-//  DELOOP_LOG_ERROR("[WM8960] Failed to initialize SAI peripheral: %d", (uint32_t) HAL_SAI_GetError(&_state.sai_tx_handle));
-//  return deloop::Error::kFailedToInitializePeripheral;
-//}
-  if (HAL_SAI_InitProtocol(&_state.sai_tx_handle, SAI_I2S_STANDARD, SAI_PROTOCOL_DATASIZE_16BIT, 2) != HAL_OK) {
+  if (HAL_SAI_InitProtocol(&_state.sai_tx_handle, SAI_I2S_STANDARD, SAI_PROTOCOL_DATASIZE_24BIT, 2) != HAL_OK) {
     DELOOP_LOG_ERROR("[WM8960] Failed to initialize SAI peripheral: %d", (uint32_t) HAL_SAI_GetError(&_state.sai_tx_handle));
     return deloop::Error::kFailedToInitializePeripheral;
   }
