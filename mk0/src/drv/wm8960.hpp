@@ -86,7 +86,7 @@ deloop::Error ResetToDefaults(void);
 // NOTE: WM8960 does not support reading from registers.
 deloop::Error WriteRegister(uint8_t reg_addr, uint16_t data);
 
-deloop::Error ExchangeData(uint16_t *tx, uint16_t *rx, uint16_t size);
+deloop::Error ExchangeData(uint8_t *tx, uint8_t *rx, uint16_t size);
 
 // int SetVolume(uint8_t volume);
 
