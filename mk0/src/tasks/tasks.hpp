@@ -1,3 +1,3 @@
 #pragma once
 
-void AddSineWaveTask();
+// No tasks defined

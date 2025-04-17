@@ -4,7 +4,6 @@
 #include "stm32f4xx_hal.h"
 #include "stm32f4xx_hal_gpio.h"
 #include "stm32f4xx_hal_uart.h"
-#include "stm32f4xx_hal_wwdg.h"
 
 #include "FreeRTOS.h"
 #include "FreeRTOSConfig.h"
@@ -57,7 +56,6 @@ int main(void) {
 
   xTaskCreateStatic(CoreLoopTask, "Core Loop", task_stack_size, NULL, 1,
                     &(task_stack[0]), &task_buffer);
-  // AddSineWaveTask();
 
   err = deloop::WM8960::Init();
   if (err != deloop::Error::kOk) {
@@ -76,11 +74,7 @@ static void CoreLoopTask(void *pvParameters) {
 
   DELOOP_LOG_INFO("Starting core loop...");
 
-  // uint8_t tx_data[6] = {0xDE, 0xAD, 0x12, 0x01, 0x02, 0x03};
   uint8_t data[4] = {0};
-  uint32_t avg_left = 0;
-  uint32_t avg_right = 0;
-  uint32_t num_ticks = 0;
   deloop::WM8960::ExchangeData((uint8_t *) tx_data, data, 22000);
   while (1) {
     DELOOP_LOG_INFO("Core loop...");
@@ -145,6 +139,9 @@ static void ConfigureSystemClock(void) {
 }
 
 static void ErrorHandler(void) {
+  // Flash LED to indicate error
+  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_SET);
   while (1) {
+    // Infinite loop
   }
 }

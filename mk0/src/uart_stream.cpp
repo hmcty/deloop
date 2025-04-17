@@ -28,7 +28,7 @@ static struct {
   QueueHandle_t queue_handle;
 
   StaticTask_t task_info;
-  StackType_t tack_stack[kTaskStackSize];
+  StackType_t task_stack[kTaskStackSize];
 } _state;
 
 static void StreamTask(void *pvParameters);
@@ -58,7 +58,7 @@ deloop::Error deloop::UartStream::Init() {
                          &_state.queue_info);
 
   xTaskCreateStatic(StreamTask, "UART Stream", kTaskStackSize, NULL, 2,
-                    _state.tack_stack, &_state.task_info);
+                    _state.task_stack, &_state.task_info);
 
   _state.initialized = true;
   return deloop::Error::kOk;
@@ -129,8 +129,8 @@ static void StreamTask(void *pvParameters) {
     StreamPacket packet = StreamPacket_init_zero;
     if (xQueueReceive(_state.queue_handle, &packet, portMAX_DELAY) == pdTRUE) {
       uint8_t buffer[StreamPacket_size + 2];
-      buffer[0] = 0xEB;
-      // TODO: Checksum + escape for start byte.
+      buffer[0] = 0xEB; // Start byte
+      // TODO: Add checksum and escape sequence for start byte
       pb_ostream_t stream =
           pb_ostream_from_buffer(buffer + 2, sizeof(buffer) - 2);
       pb_encode(&stream, StreamPacket_fields, &packet);

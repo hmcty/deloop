@@ -4,40 +4,24 @@
 
 #include "stm32f4xx_hal.h"
 
+// Forward declaration
+void vAssertCalled(const char *const pcFileName, unsigned long ulLine);
+
 void vApplicationMallocFailedHook(void) {
-  // vApplicationMallocFailedHook() will only be called if
-  // configUSE_MALLOC_FAILED_HOOK is set to 1 in FreeRTOSConfig.h.  It is a hook
-  // function that will get called if a call to pvPortMalloc() fails.
-  // pvPortMalloc() is called internally by the kernel whenever a task, queue,
-  // timer or semaphore is created.  It is also called by various parts of the
-  // demo application.  If heap_1.c, heap_2.c or heap_4.c is being used, then
-  // the size of the    heap available to pvPortMalloc() is defined by
-  // configTOTAL_HEAP_SIZE in FreeRTOSConfig.h, and the xPortGetFreeHeapSize()
-  // API function can be used to query the size of free heap space that remains
-  // (although it does not provide information on how the remaining heap might
-  // be fragmented).  See http://www.freertos.org/a00111.html for more
-  // information.
-  // vAssertCalled(__FILE__, __LINE__);
+  // Called if a call to pvPortMalloc() fails
+  vAssertCalled(__FILE__, __LINE__);
 }
 
 void vApplicationIdleHook(void) {
-  // vApplicationIdleHook() will only be called if configUSE_IDLE_HOOK is set
-  // to 1 in FreeRTOSConfig.h.  It will be called on each iteration of the idle
-  // task.  It is essential that code added to this hook function never attempts
-  // to block in any way (for example, call xQueueReceive() with a block time
-  // specified, or call vTaskDelay()).  If application tasks make use of the
-  // vTaskDelete() API function to delete themselves then it is also important
-  // that vApplicationIdleHook() is permitted to return to its calling function,
-  // because it is the responsibility of the idle task to clean up memory
-  // allocated by the kernel to any task that has since deleted itself.
-  // usleep(15000);
+  // This hook is called on each iteration of the idle task
+  // Implementation is intentionally empty
 }
 
 void vApplicationStackOverflowHook(TaskHandle_t pxTask, char *pcTaskName) {
   (void)pcTaskName;
   (void)pxTask;
 
-  // vAssertCalled(__FILE__, __LINE__);
+  vAssertCalled(__FILE__, __LINE__);
 }
 
 void vApplicationTickHook(void) {
@@ -50,11 +34,8 @@ void vApplicationTickHook(void) {
 }
 
 void vLoggingPrintf(const char *pcFormat, ...) {
+  // Intentionally empty - logging is handled elsewhere
   (void)pcFormat;
-  // va_list arg;
-  // va_start(arg, pcFormat);
-  // vprintf(pcFormat, arg);
-  // va_end(arg);
 }
 
 void vAssertCalled(const char *const pcFileName, unsigned long ulLine) {

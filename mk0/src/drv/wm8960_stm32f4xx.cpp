@@ -57,14 +57,10 @@ deloop::Error deloop::WM8960::Init() {
   _state.sai_tx_handle.Init.OutputDrive = SAI_OUTPUTDRIVE_ENABLE;
   _state.sai_tx_handle.Init.NoDivider = SAI_MASTERDIVIDER_ENABLE;
   _state.sai_tx_handle.Init.FIFOThreshold = SAI_FIFOTHRESHOLD_FULL;
-  // _state.sai_tx_handle.Init.FIFOThreshold = SAI_FIFOTHRESHOLD_FULL;
+  // The following settings are applied by HAL_SAI_InitProtocol below:
+  // - Protocol, DataSize, FirstBit, ClockStrobing, etc.
   _state.sai_tx_handle.Init.ClockSource = SAI_CLKSOURCE_PLLSAI;
-  // _state.sai_tx_handle.Init.AudioFrequency = SAI_AUDIO_FREQUENCY_48K;
   _state.sai_tx_handle.Init.AudioFrequency = SAI_AUDIO_FREQUENCY_22K;
-  // _state.sai_tx_handle.Init.Protocol = SAI_FREE_PROTOCOL;
-  // _state.sai_tx_handle.Init.DataSize = SAI_DATASIZE_24;
-  // _state.sai_tx_handle.Init.FirstBit = SAI_FIRSTBIT_MSB;
-  // _state.sai_tx_handle.Init.ClockStrobing = SAI_CLOCKSTROBING_RISINGEDGE;
 
   if (HAL_SAI_InitProtocol(&_state.sai_tx_handle, SAI_I2S_STANDARD, SAI_PROTOCOL_DATASIZE_24BIT, 2) != HAL_OK) {
     DELOOP_LOG_ERROR("[WM8960] Failed to initialize SAI peripheral: %d", (uint32_t) HAL_SAI_GetError(&_state.sai_tx_handle));
@@ -102,8 +98,7 @@ deloop::Error deloop::WM8960::Init() {
   // }
 
   _state.initialized = true;
-  return deloop::Error::kOk;
-  // return deloop::WM8960::ResetToDefaults();
+  return deloop::WM8960::ResetToDefaults();
 }
 
 deloop::Error deloop::WM8960::ResetToDefaults(void) {
@@ -130,24 +125,7 @@ deloop::Error deloop::WM8960::ResetToDefaults(void) {
     WM8960_REG_FLAG_POWER_MGMT_3_LMIC_ON |
     WM8960_REG_FLAG_POWER_MGMT_3_RMIC_ON));
 
-  // DELOOP_RETURN_IF_ERROR(deloop::WM8960::WriteRegister(
-  //     WM8960_REG_ADDR_POWER_MGMT_3,
-  //     WM8960_REG_MASK_POWER_MGMT_3_LOMIX |
-  //     WM8960_REG_MASK_POWER_MGMT_3_ROMIX));
-  // DELOOP_RETURN_IF_ERROR(deloop::WM8960::WriteRegister(
-  //     WM8960_REG_ADDR_LEFT_MIXER_CTL, WM8960_REG_MASK_LEFT_MIXER_CTL_LD2LO));
-  // DELOOP_RETURN_IF_ERROR(deloop::WM8960::WriteRegister(
-  //     WM8960_REG_ADDR_RIGHT_MIXER_CTL,
-  //     WM8960_REG_MASK_RIGHT_MIXER_CTL_RD2RO));
-  // DELOOP_RETURN_IF_ERROR(deloop::WM8960::WriteRegister(
-  //     WM8960_REG_ADDR_POWER_MGMT_2,
-  //     (WM8960_REG_MASK_POWER_MGMT_2_SPKR | WM8960_REG_MASK_POWER_MGMT_2_SPKL
-  //     |
-  //      WM8960_REG_MASK_POWER_MGMT_2_ROUT1 |
-  //      WM8960_REG_MASK_POWER_MGMT_2_LOUT1 | WM8960_REG_MASK_POWER_MGMT_2_DACL
-  //      | WM8960_REG_MASK_POWER_MGMT_2_DACR)));
-
-  // HAL_I2S_DMAResume(&_state.i2s_handle);
+  // TODO: Add additional mixer and power management configuration for DAC
 
   return deloop::Error::kOk;
 }
@@ -159,8 +137,8 @@ deloop::Error deloop::WM8960::WriteRegister(uint8_t reg_addr, uint16_t data) {
     return deloop::Error::kInvalidArgument;
   }
 
-  uint8_t ctrl_data[2] = {(reg_addr << 1) | ((data >> 8) & 0x01),
-                          (uint8_t)data & 0xFF};
+  uint8_t ctrl_data[2] = {static_cast<uint8_t>((reg_addr << 1) | ((data >> 8) & 0x01)),
+                          static_cast<uint8_t>(data & 0xFF)};
   auto status = HAL_I2C_Master_Transmit(&_state.i2c_handle, WM8960_I2C_ADDR,
                                         ctrl_data, 2, 1000);
   switch (status) {
@@ -178,6 +156,8 @@ deloop::Error deloop::WM8960::WriteRegister(uint8_t reg_addr, uint16_t data) {
 }
 
 deloop::Error deloop::WM8960::ExchangeData(uint8_t *tx, uint8_t *rx, uint16_t size) {
+  (void)rx;  // Parameter currently unused
+
   if (!_state.initialized) {
     return deloop::Error::kNotInitialized;
   }
@@ -198,70 +178,9 @@ deloop::Error deloop::WM8960::ExchangeData(uint8_t *tx, uint8_t *rx, uint16_t si
   }
 }
 
-// int WM8960::SetVolume(uint8_t volume) {
-//   if (volume > 64) {
-//     volume = 64;
-//   }
-//   int err_code = WriteRegister(
-//     WM8960_REG_ADDR_LEFT_CHAN_VOL,
-//     WM8960_REG_MASK_LEFT_CHAN_VOL_DACVU |
-//     (WM8960_REG_MASK_LEFT_CHAN_VOL_LDACVOL & volume));
-//   if (err_code != 0) {
-//     return err_code;
-//   }
-//
-//   return WriteRegister(
-//     WM8960_REG_ADDR_RIGHT_CHAN_VOL,
-//     WM8960_REG_MASK_RIGHT_CHAN_VOL_DACVU |
-//     (WM8960_REG_MASK_RIGHT_CHAN_VOL_RDACVOL & volume));
-// }
-//
-// int WM8960::Play() {
-//   HAL_I2S_DMAResume(&i2s_handle);
-//
-//   int err_code = WriteRegister(
-//     WM8960_REG_ADDR_CLASS_D_CTL_1,
-//     (0x01 & WM8960_REG_MASK_CLASS_D_CTL_1_SPK_OP_EN));
-//   if (err_code != 0) {
-//     return err_code;
-//   }
-//
-//   return 0;
-// }
-//
-// int WM8960::Pause() {
-//   HAL_I2S_DMAPause(&i2s_handle);
-//   return 0;
-// }
-//
-// int WM8960::Stop() {
-//   HAL_I2S_DMAStop(&i2s_handle);
-//   return 0;
-// }
-//
-// int WM8960::Write(const uint16_t *data, uint16_t size) {
-//   HAL_I2S_Transmit_DMA(&i2s_handle, (uint16_t *) data, size);
-//   return 0;
-// }
-
-// std::expected<uint8_t, int> ReadRegister(uint8_t reg_addr) {
-//   uint8_t reg_data;
-//   if (HAL_I2C_Mem_Read(
-//     &i2c_handle,
-//     WM8960_I2C_ADDR,
-//     reg_addr,
-//     I2C_MEMADD_SIZE_8BIT,
-//     &reg_data,
-//     1,
-//     100,
-//   ) != HAL_OK) {
-//     return std::unexpected<int>(-1);
-//   }
-//   return reg_data;
-// }
-
-// deloop::Error WriteRegister(uint8_t reg_addr, uint8_t reg_data) {
-//   HAL_I2C_Mem_Write(&_state.i2c_handle, WM8960_I2C_ADDR, reg_addr,
-//                     I2C_MEMADD_SIZE_8BIT, &reg_data, 1, 100);
-//   return deloop::Error::kOk;
-// }
+// TODO: Implement these functions when needed:
+// - SetVolume: Set volume level
+// - Play: Start audio playback
+// - Pause: Pause audio playback
+// - Stop: Stop audio playback
+// - Write: Write audio data to DAC
