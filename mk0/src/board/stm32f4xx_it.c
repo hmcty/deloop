@@ -1,5 +1,7 @@
 #include "stm32f4xx_it.h"
 
+#include <stdint.h>
+
 /******************************************************************************/
 /*            Cortex-M4 Processor Exceptions Handlers                         */
 /******************************************************************************/
@@ -98,4 +100,3 @@ void DebugMon_Handler(void) {}
 /*void PPP_IRQHandler(void)
 {
 }*/
-

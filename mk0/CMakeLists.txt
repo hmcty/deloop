@@ -79,11 +79,11 @@ nanopb_generate_cpp(TARGET proto
   ${CMAKE_SOURCE_DIR}/proto/stream.proto
 )
 
-file(MAKE_DIRECTORY ${CMAKE_SOURCE_DIR}/python)
+file(MAKE_DIRECTORY ${CMAKE_SOURCE_DIR}/python/deloop_mk0)
 add_custom_command(TARGET proto
 POST_BUILD
 COMMAND
-  protoc -I=${CMAKE_SOURCE_DIR}/proto --python_out=${CMAKE_SOURCE_DIR}/python
+  protoc -I=${CMAKE_SOURCE_DIR}/proto --python_out=${CMAKE_SOURCE_DIR}/python/deloop_mk0
   ${CMAKE_SOURCE_DIR}/proto/log.proto
   ${CMAKE_SOURCE_DIR}/proto/stream.proto
 )
@@ -139,7 +139,7 @@ add_custom_command(TARGET ${EXECUTABLE}
 POST_BUILD
 COMMAND
   ${CMAKE_SOURCE_DIR}/scripts/create_log_table.py
-  --output ${CMAKE_SOURCE_DIR}/python/log_table.json
+  --output ${CMAKE_SOURCE_DIR}/python/deloop_mk0/log_table.json
   # NOTE: This must match the logging macros described in `src/logging.hpp`.
   --macro DELOOP_LOG_INFO DELOOP_LOG_WARNING DELOOP_LOG_ERROR
   --source_files ${SOURCES}

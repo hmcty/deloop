@@ -52,9 +52,9 @@ let
     '';
 
     installPhase = ''
-      mkdir -p $out/bin $out/python
+      mkdir -p $out/bin $out/python/deloop_mk0
       cp *.hex *.elf *.bin *.map *.lst *.size $out/bin
-      cp ../python/*_pb2.py ../python/*.json $out/python
+      cp ../python/**/*_pb2.py ../python/**/*.json $out/python
     '';
   };
 
