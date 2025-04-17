@@ -11,6 +11,12 @@ define where_fault
   where $fault
 end
 
+define which_irqn
+  set $irqn = *(volatile uint32_t *) 0xE000ED04
+  set $irqn = ($irqn & 0x1FF) - 16
+  print "IRQn: %d\n", $irqn
+end
+
 define dump_sai1
   # SAI1 register base address (pg. 68 of STM32F446 datasheet)
   set $SAI1_BASE_ADDR = 0x40015800
@@ -41,3 +47,4 @@ define dump_sai1
 end
 
 load_stm32f4
+b Default_Handler

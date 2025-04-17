@@ -57,7 +57,7 @@ deloop::Error deloop::UartStream::Init() {
       xQueueCreateStatic(kQueueSize, sizeof(StreamPacket), _state.queue_buffer,
                          &_state.queue_info);
 
-  xTaskCreateStatic(StreamTask, "UART Stream", kTaskStackSize, NULL, 1,
+  xTaskCreateStatic(StreamTask, "UART Stream", kTaskStackSize, NULL, 2,
                     _state.tack_stack, &_state.task_info);
 
   _state.initialized = true;

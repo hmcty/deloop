@@ -2,6 +2,7 @@
 
 pkgs.mkShell {
   buildInputs = with pkgs; [
+    cmake
     stlink
     gcc-arm-embedded-13
     protobuf_25

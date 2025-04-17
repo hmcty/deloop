@@ -4,6 +4,7 @@
 #include "stm32f4xx_hal.h"
 #include "stm32f4xx_hal_gpio.h"
 #include "stm32f4xx_hal_uart.h"
+#include "stm32f4xx_hal_wwdg.h"
 
 #include "FreeRTOS.h"
 #include "FreeRTOSConfig.h"
@@ -23,6 +24,8 @@ static void CoreLoopTask(void *pvParameters);
 const size_t task_stack_size = configMINIMAL_STACK_SIZE * 2;
 static StaticTask_t task_buffer;
 static StackType_t task_stack[task_stack_size];
+
+static uint32_t tx_data[22000] = {0};
 
 int main(void) {
   // STM32F4xx HAL library initialization:
@@ -71,14 +74,16 @@ int main(void) {
 static void CoreLoopTask(void *pvParameters) {
   (void)pvParameters;
 
+  DELOOP_LOG_INFO("Starting core loop...");
+
   // uint8_t tx_data[6] = {0xDE, 0xAD, 0x12, 0x01, 0x02, 0x03};
-  uint32_t tx_data[3] = {0xDEAD, 0x1234, 0x5678};
   uint8_t data[4] = {0};
   uint32_t avg_left = 0;
   uint32_t avg_right = 0;
   uint32_t num_ticks = 0;
-  deloop::WM8960::ExchangeData((uint8_t *) tx_data, data, 3);
+  deloop::WM8960::ExchangeData((uint8_t *) tx_data, data, 22000);
   while (1) {
+    DELOOP_LOG_INFO("Core loop...");
     vTaskDelay(100);
   }
 }

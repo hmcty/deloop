@@ -32,22 +32,7 @@ deloop::Error deloop::WM8960::Init() {
   DELOOP_LOG_INFO("[WM8960] Initializing...");
   memset(&_state, 0, sizeof(_state));
 
-  // Initialize I2S.
-  // _state.i2s_handle.Instance = SPI2; // TODO: Allow for usage of other SPI peripherals.
-  // _state.i2s_handle.Init.Mode = I2S_MODE_MASTER_TX;
-  // _state.i2s_handle.Init.Standard = I2S_STANDARD_PHILIPS;
-  // _state.i2s_handle.Init.DataFormat = I2S_DATAFORMAT_24B;
-  // _state.i2s_handle.Init.MCLKOutput = I2S_MCLKOUTPUT_ENABLE;
-  // _state.i2s_handle.Init.AudioFreq = I2S_AUDIOFREQ_48K;
-  // _state.i2s_handle.Init.CPOL = I2S_CPOL_LOW;
-  // _state.i2s_handle.Init.ClockSource = I2S_CLOCK_PLL;
-  // _state.i2s_handle.Init.FullDuplexMode = I2S_FULLDUPLEXMODE_ENABLE;
-  // if (HAL_I2S_Init(&_state.i2s_handle) != HAL_OK) {
-  //   DELOOP_LOG_ERROR("[WM8960] Failed to initialize I2S peripheral: %d", (uint32_t) HAL_I2S_GetError(&_state.i2s_handle));
-  //   return deloop::Error::kFailedToInitializePeripheral;
-  // }
-
-
+  // Initialize I2C.
   _state.i2c_handle.Instance = I2C1;
   _state.i2c_handle.Init.ClockSpeed = 100000;
   _state.i2c_handle.Init.DutyCycle = I2C_DUTYCYCLE_2;
@@ -71,7 +56,7 @@ deloop::Error deloop::WM8960::Init() {
   _state.sai_tx_handle.Init.Synchro = SAI_ASYNCHRONOUS;
   _state.sai_tx_handle.Init.OutputDrive = SAI_OUTPUTDRIVE_ENABLE;
   _state.sai_tx_handle.Init.NoDivider = SAI_MASTERDIVIDER_ENABLE;
-  _state.sai_tx_handle.Init.FIFOThreshold = SAI_FIFOTHRESHOLD_1QF;
+  _state.sai_tx_handle.Init.FIFOThreshold = SAI_FIFOTHRESHOLD_FULL;
   // _state.sai_tx_handle.Init.FIFOThreshold = SAI_FIFOTHRESHOLD_FULL;
   _state.sai_tx_handle.Init.ClockSource = SAI_CLKSOURCE_PLLSAI;
   // _state.sai_tx_handle.Init.AudioFrequency = SAI_AUDIO_FREQUENCY_48K;

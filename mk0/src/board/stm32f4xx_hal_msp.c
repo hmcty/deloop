@@ -22,25 +22,25 @@
 
 #define USARTx USART2
 #define USARTx_CLK_ENABLE() __HAL_RCC_USART2_CLK_ENABLE();
-#define USARTx_RX_GPIO_CLK_ENABLE() __HAL_RCC_GPIOD_CLK_ENABLE()
-#define USARTx_TX_GPIO_CLK_ENABLE() __HAL_RCC_GPIOD_CLK_ENABLE()
+#define USARTx_RX_GPIO_CLK_ENABLE() __HAL_RCC_GPIOA_CLK_ENABLE()
+#define USARTx_TX_GPIO_CLK_ENABLE() __HAL_RCC_GPIOA_CLK_ENABLE()
 
 #define USARTx_FORCE_RESET() __HAL_RCC_USART2_FORCE_RESET()
 #define USARTx_RELEASE_RESET() __HAL_RCC_USART2_RELEASE_RESET()
 
-// #define USARTx_TX_PIN GPIO_PIN_2
-// #define USARTx_TX_GPIO_PORT GPIOA
-// #define USARTx_TX_AF GPIO_AF7_USART2
-// #define USARTx_RX_PIN GPIO_PIN_3
-// #define USARTx_RX_GPIO_PORT GPIOA
-// #define USARTx_RX_AF GPIO_AF7_USART2
-
-#define USARTx_TX_PIN GPIO_PIN_5
-#define USARTx_TX_GPIO_PORT GPIOD
+#define USARTx_TX_PIN GPIO_PIN_2
+#define USARTx_TX_GPIO_PORT GPIOA
 #define USARTx_TX_AF GPIO_AF7_USART2
-#define USARTx_RX_PIN GPIO_PIN_6
-#define USARTx_RX_GPIO_PORT GPIOD
+#define USARTx_RX_PIN GPIO_PIN_3
+#define USARTx_RX_GPIO_PORT GPIOA
 #define USARTx_RX_AF GPIO_AF7_USART2
+
+// #define USARTx_TX_PIN GPIO_PIN_5
+// #define USARTx_TX_GPIO_PORT GPIOD
+// #define USARTx_TX_AF GPIO_AF7_USART2
+// #define USARTx_RX_PIN GPIO_PIN_6
+// #define USARTx_RX_GPIO_PORT GPIOD
+// #define USARTx_RX_AF GPIO_AF7_USART2
 
 // Pinout definitions for SAI1
 // - SCK -> PB12
@@ -53,22 +53,22 @@
 #define SAIx_TX_CLK_ENABLE() __HAL_RCC_GPIOB_CLK_ENABLE()
 #define SAIx_RX_CLK_ENABLE() __HAL_RCC_GPIOA_CLK_ENABLE()
 
-// A3 - FS
+// B9 - FS
 #define SAIx_FS_GPIO_PORT GPIOB
 #define SAIx_FS_AF GPIO_AF6_SAI1
 #define SAIx_FS_PIN GPIO_PIN_9
 
-// B10 - SCK
+// B12 - SCK
 #define SAIx_SCK_GPIO_PORT GPIOB
 #define SAIx_SCK_AF GPIO_AF6_SAI1
 #define SAIx_SCK_PIN GPIO_PIN_12
 
-// B2 - TX-SD
+// A9 - TX-SD
 #define SAIx_TX_SD_GPIO_PORT GPIOA
 #define SAIx_TX_SD_AF GPIO_AF6_SAI1
 #define SAIx_TX_SD_PIN GPIO_PIN_9
 
-// A9 - RX-SD
+// B2 - RX-SD
 #define SAIx_RX_SD_GPIO_PORT GPIOB
 #define SAIx_RX_SD_AF GPIO_AF6_SAI1
 #define SAIx_RX_SD_PIN GPIO_PIN_2
@@ -77,6 +77,7 @@ void HAL_MspInit(void) {
   // Ensure all priority bits are assigned as preemption priority bits.
   // Required by FreeRTOS.
   NVIC_SetPriorityGrouping(NVIC_PRIORITYGROUP_4);
+  HAL_NVIC_SetPriority(SysTick_IRQn, 15U, 0U);
 
   // TODO: Set system interrupt priorities?
 }
@@ -143,8 +144,8 @@ void HAL_SAI_MspInit(SAI_HandleTypeDef *hsai) {
     hdma_tx.Init.MemInc = DMA_MINC_ENABLE;
     hdma_tx.Init.PeriphDataAlignment = DMA_PDATAALIGN_WORD;
     hdma_tx.Init.MemDataAlignment = DMA_MDATAALIGN_WORD;
-    hdma_tx.Init.Mode = DMA_CIRCULAR;
-    hdma_tx.Init.Priority = DMA_PRIORITY_HIGH;
+    hdma_tx.Init.Mode = DMA_NORMAL; // DMA_CIRCULAR;
+    hdma_tx.Init.Priority = DMA_PRIORITY_MEDIUM;
     hdma_tx.Init.FIFOMode            = DMA_FIFOMODE_ENABLE;
     hdma_tx.Init.FIFOThreshold       = DMA_FIFO_THRESHOLD_FULL;
     hdma_tx.Init.MemBurst            = DMA_MBURST_SINGLE;
@@ -154,8 +155,8 @@ void HAL_SAI_MspInit(SAI_HandleTypeDef *hsai) {
     HAL_DMA_DeInit(&hdma_tx);
     HAL_DMA_Init(&hdma_tx);
 
-    HAL_NVIC_SetPriority(DMA2_Stream5_IRQn, 0x01, 0);
-    HAL_NVIC_EnableIRQ(DMA2_Stream5_IRQn);
+    //HAL_NVIC_SetPriority(DMA2_Stream5_IRQn, 0x09, 0);
+    //HAL_NVIC_EnableIRQ(DMA2_Stream5_IRQn);
   } else if (hsai->Instance == SAIx_RX_BLOCK) {
     // SAI1_B_FS
     GPIO_InitStruct.Pin = SAIx_RX_SD_PIN;
@@ -178,83 +179,6 @@ void HAL_SAI_MspInit(SAI_HandleTypeDef *hsai) {
     __HAL_LINKDMA(hsai, hdmarx, hdma_rx);
   }
 }
-
-// void HAL_I2S_MspInit(I2S_HandleTypeDef *hi2s) {
-//   if (hi2s->Instance != SPI2) {
-//     return;
-//   }
-//
-//   // PLL configuration for I2S clock.
-//   // PLLI2SM - Division factor for PLL VCO input (must be between 2 and 63).
-//   // PLLI2SN - Multiplication factor for PLLI2S VCO output (must be between
-//   //           50 and 432).
-//   // PLLI2SR - Division factor for I2S clock (must be between 2 and 7).
-//   RCC_PeriphCLKInitTypeDef PeriphClkInitStruct;
-//   PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_I2S_APB1;
-//   PeriphClkInitStruct.PLLI2S.PLLI2SM = 8;
-//   PeriphClkInitStruct.PLLI2S.PLLI2SN = 192;
-//   PeriphClkInitStruct.PLLI2S.PLLI2SR = 2;
-//   HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct);
-//
-//   __HAL_RCC_SPI2_CLK_ENABLE();
-//   __HAL_RCC_GPIOB_CLK_ENABLE();
-//
-//   // I2S2 GPIO Configuration
-//   // * PB_15 -> I2S_DAC / SPI2_MOSI
-//   // * PB_14 -> I2S_ADC / SPI2_MISO
-//   // * PC_13  -> I2S_CLK / SPI2_SCK
-//   // * PB_12  -> I2S_WS  / SPI2_CS
-//   GPIO_InitTypeDef GPIO_InitStruct;
-//   GPIO_InitStruct.Pin = GPIO_PIN_15 | GPIO_PIN_14 | GPIO_PIN_13 | GPIO_PIN_12;
-//   GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
-//   GPIO_InitStruct.Pull = GPIO_NOPULL;
-//   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
-//   GPIO_InitStruct.Alternate = GPIO_AF5_SPI2;
-//   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-//
-//   // Enable I2S DMA clock.
-//   __HAL_RCC_DMA1_CLK_ENABLE();
-//
-//   // Configure the DMA handler for transmission process
-//   static DMA_HandleTypeDef hdma_tx;
-//   hdma_tx.Instance = DMA1_Stream4;
-//   hdma_tx.Init.Channel = DMA_CHANNEL_0;
-//   hdma_tx.Init.Direction = DMA_MEMORY_TO_PERIPH;
-//   hdma_tx.Init.PeriphInc = DMA_PINC_DISABLE;
-//   hdma_tx.Init.MemInc = DMA_MINC_ENABLE;
-//   hdma_tx.Init.PeriphDataAlignment = DMA_PDATAALIGN_HALFWORD;
-//   hdma_tx.Init.MemDataAlignment = DMA_MDATAALIGN_HALFWORD;
-//   hdma_tx.Init.Mode = DMA_CIRCULAR;
-//   hdma_tx.Init.Priority = DMA_PRIORITY_HIGH;
-//   hdma_tx.Init.FIFOMode = DMA_FIFOMODE_DISABLE;
-//   HAL_DMA_Init(&hdma_tx);
-//   __HAL_LINKDMA(hi2s, hdmatx, hdma_tx);
-//
-//   // Configure the DMA handler for reception process
-//   static DMA_HandleTypeDef hdma_rx;
-//   hdma_rx.Instance = DMA1_Stream3;
-//   hdma_rx.Init.Channel = DMA_CHANNEL_0;
-//   hdma_rx.Init.Direction = DMA_PERIPH_TO_MEMORY;
-//   hdma_rx.Init.PeriphInc = DMA_PINC_DISABLE;
-//   hdma_rx.Init.MemInc = DMA_MINC_ENABLE;
-//   hdma_rx.Init.PeriphDataAlignment = DMA_PDATAALIGN_HALFWORD;
-//   hdma_rx.Init.MemDataAlignment = DMA_MDATAALIGN_HALFWORD;
-//   hdma_rx.Init.Mode = DMA_CIRCULAR;
-//   hdma_rx.Init.Priority = DMA_PRIORITY_HIGH;
-//   hdma_rx.Init.FIFOMode = DMA_FIFOMODE_DISABLE;
-//   HAL_DMA_Init(&hdma_rx);
-//   __HAL_LINKDMA(hi2s, hdmarx, hdma_rx);
-// }
-//
-// void HAL_I2S_MspDeInit(I2S_HandleTypeDef *hi2s) {
-//   if (hi2s->Instance == SPI2) {
-//     __HAL_RCC_SPI2_CLK_DISABLE();
-//     HAL_GPIO_DeInit(GPIOB, GPIO_PIN_15 | GPIO_PIN_14 | GPIO_PIN_13 | GPIO_PIN_12);
-//     HAL_DMA_DeInit(hi2s->hdmatx);
-//     HAL_DMA_DeInit(hi2s->hdmarx);
-//     __HAL_RCC_DMA1_CLK_DISABLE();
-//   }
-// }
 
 void HAL_I2C_MspInit(I2C_HandleTypeDef *hi2c) {
   if (hi2c->Instance != I2C1) {
