@@ -3,23 +3,6 @@
 #include "stm32f4xx_hal_i2s.h"
 #include "stm32f4xx_hal_sai.h"
 
-/*
-#define USARTx                           USART3
-#define USARTx_CLK_ENABLE()              __HAL_RCC_USART3_CLK_ENABLE();
-#define USARTx_RX_GPIO_CLK_ENABLE()      __HAL_RCC_GPIOD_CLK_ENABLE()
-#define USARTx_TX_GPIO_CLK_ENABLE()      __HAL_RCC_GPIOD_CLK_ENABLE()
-
-#define USARTx_FORCE_RESET()             __HAL_RCC_USART3_FORCE_RESET()
-#define USARTx_RELEASE_RESET()           __HAL_RCC_USART3_RELEASE_RESET()
-
-#define USARTx_TX_PIN                    GPIO_PIN_8
-#define USARTx_TX_GPIO_PORT              GPIOD
-#define USARTx_TX_AF                     GPIO_AF7_USART3
-#define USARTx_RX_PIN                    GPIO_PIN_9
-#define USARTx_RX_GPIO_PORT              GPIOD
-#define USARTx_RX_AF                     GPIO_AF7_USART3
-*/
-
 #define USARTx USART2
 #define USARTx_CLK_ENABLE() __HAL_RCC_USART2_CLK_ENABLE();
 #define USARTx_RX_GPIO_CLK_ENABLE() __HAL_RCC_GPIOA_CLK_ENABLE()
@@ -34,13 +17,6 @@
 #define USARTx_RX_PIN GPIO_PIN_3
 #define USARTx_RX_GPIO_PORT GPIOA
 #define USARTx_RX_AF GPIO_AF7_USART2
-
-// #define USARTx_TX_PIN GPIO_PIN_5
-// #define USARTx_TX_GPIO_PORT GPIOD
-// #define USARTx_TX_AF GPIO_AF7_USART2
-// #define USARTx_RX_PIN GPIO_PIN_6
-// #define USARTx_RX_GPIO_PORT GPIOD
-// #define USARTx_RX_AF GPIO_AF7_USART2
 
 // Pinout definitions for SAI1
 // - SCK -> PB12
@@ -137,19 +113,18 @@ void HAL_SAI_MspInit(SAI_HandleTypeDef *hsai) {
     // Configure the DMA handler for transmission process
     static DMA_HandleTypeDef hdma_tx;
     hdma_tx.Instance = DMA2_Stream5;
-    // hdma_tx.Init.Request = DMA_REQUEST_SAI1_A;
     hdma_tx.Init.Channel = DMA_CHANNEL_0;
     hdma_tx.Init.Direction = DMA_MEMORY_TO_PERIPH;
     hdma_tx.Init.PeriphInc = DMA_PINC_DISABLE;
     hdma_tx.Init.MemInc = DMA_MINC_ENABLE;
     hdma_tx.Init.PeriphDataAlignment = DMA_PDATAALIGN_WORD;
     hdma_tx.Init.MemDataAlignment = DMA_MDATAALIGN_WORD;
-    hdma_tx.Init.Mode = DMA_NORMAL; // DMA_CIRCULAR;
-    hdma_tx.Init.Priority = DMA_PRIORITY_MEDIUM;
-    hdma_tx.Init.FIFOMode            = DMA_FIFOMODE_ENABLE;
-    hdma_tx.Init.FIFOThreshold       = DMA_FIFO_THRESHOLD_FULL;
-    hdma_tx.Init.MemBurst            = DMA_MBURST_SINGLE;
-    hdma_tx.Init.PeriphBurst         = DMA_PBURST_SINGLE;
+    hdma_tx.Init.Mode = DMA_CIRCULAR;
+    hdma_tx.Init.Priority = DMA_PRIORITY_HIGH;
+    hdma_tx.Init.FIFOMode = DMA_FIFOMODE_ENABLE;
+    hdma_tx.Init.FIFOThreshold = DMA_FIFO_THRESHOLD_FULL;
+    hdma_tx.Init.MemBurst = DMA_MBURST_SINGLE;
+    hdma_tx.Init.PeriphBurst = DMA_PBURST_SINGLE;
 
     __HAL_LINKDMA(hsai, hdmatx, hdma_tx);
     HAL_DMA_DeInit(&hdma_tx);
@@ -165,18 +140,23 @@ void HAL_SAI_MspInit(SAI_HandleTypeDef *hsai) {
 
     // Configure the DMA handler for reception process
     static DMA_HandleTypeDef hdma_rx;
-    hdma_rx.Instance = DMA1_Stream3;
+    hdma_rx.Instance = DMA2_Stream3;
     hdma_rx.Init.Channel = DMA_CHANNEL_0;
     hdma_rx.Init.Direction = DMA_PERIPH_TO_MEMORY;
     hdma_rx.Init.PeriphInc = DMA_PINC_DISABLE;
     hdma_rx.Init.MemInc = DMA_MINC_ENABLE;
-    hdma_rx.Init.PeriphDataAlignment = DMA_PDATAALIGN_HALFWORD;
-    hdma_rx.Init.MemDataAlignment = DMA_MDATAALIGN_HALFWORD;
+    hdma_rx.Init.PeriphDataAlignment = DMA_PDATAALIGN_WORD;
+    hdma_rx.Init.MemDataAlignment = DMA_MDATAALIGN_WORD;
     hdma_rx.Init.Mode = DMA_CIRCULAR;
     hdma_rx.Init.Priority = DMA_PRIORITY_HIGH;
-    hdma_rx.Init.FIFOMode = DMA_FIFOMODE_DISABLE;
-    HAL_DMA_Init(&hdma_rx);
+    hdma_rx.Init.FIFOMode = DMA_FIFOMODE_ENABLE;
+    hdma_rx.Init.FIFOThreshold = DMA_FIFO_THRESHOLD_FULL;
+    hdma_rx.Init.MemBurst = DMA_MBURST_SINGLE;
+    hdma_rx.Init.PeriphBurst = DMA_PBURST_SINGLE;
+
     __HAL_LINKDMA(hsai, hdmarx, hdma_rx);
+    HAL_DMA_DeInit(&hdma_rx);
+    HAL_DMA_Init(&hdma_rx);
   }
 }
 
@@ -190,9 +170,9 @@ void HAL_I2C_MspInit(I2C_HandleTypeDef *hi2c) {
   __HAL_RCC_GPIOC_CLK_ENABLE();
 
   // I2C1 GPIO Configuration
-  // * PB_8 -> I2C1_SCL
-  // * PC_7 -> I2C1_SDA
-  GPIO_InitStruct.Pin = GPIO_PIN_8;
+  // * PB_6 -> I2C1_SCL
+  // * PB_7 -> I2C1_SDA
+  GPIO_InitStruct.Pin = GPIO_PIN_6;
   GPIO_InitStruct.Mode = GPIO_MODE_AF_OD;
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   GPIO_InitStruct.Speed = GPIO_SPEED_LOW;
@@ -201,7 +181,7 @@ void HAL_I2C_MspInit(I2C_HandleTypeDef *hi2c) {
 
   GPIO_InitStruct.Pin = GPIO_PIN_7;
   GPIO_InitStruct.Alternate = GPIO_AF4_I2C1;
-  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   __HAL_RCC_I2C1_CLK_ENABLE();
 }
@@ -211,8 +191,8 @@ void HAL_I2C_MspDeInit(I2C_HandleTypeDef *hi2c) {
     __HAL_RCC_I2C1_FORCE_RESET();
     __HAL_RCC_I2C1_RELEASE_RESET();
     __HAL_RCC_I2C1_CLK_DISABLE();
-    HAL_GPIO_DeInit(GPIOB, GPIO_PIN_8);
-    HAL_GPIO_DeInit(GPIOC, GPIO_PIN_7);
+    HAL_GPIO_DeInit(GPIOB, GPIO_PIN_6);
+    HAL_GPIO_DeInit(GPIOB, GPIO_PIN_7);
   }
 }
 

@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.15)
 project(deloop_mk0
-  VERSION 0.1.0
+  VERSION 0.2.0
   DESCRIPTION "Deloop Mk0"
 )
 
@@ -143,5 +143,6 @@ COMMAND
   # NOTE: This must match the logging macros described in `src/logging.hpp`.
   --macro DELOOP_LOG_INFO DELOOP_LOG_WARNING DELOOP_LOG_ERROR
   --source_files ${SOURCES}
+  --source_version ${PROJECT_VERSION}
 WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
 )

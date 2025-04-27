@@ -49,6 +49,10 @@ def main(args: argparse.Namespace) -> None:
     )
 
     log_table = {}
+    if os.path.isfile(args.output) and os.path.getsize(args.output) > 0:
+        with open(args.output, "r") as output_file:
+            log_table = json.load(output_file)
+
     for source_file in args.source_files:
         if not os.path.isfile(source_file):
             print(f"File not found: {source_file}")
@@ -59,7 +63,21 @@ def main(args: argparse.Namespace) -> None:
             matches = macro_re.findall(content)
             for (_, match) in matches:
                 msg = match.strip('"')
-                log_table[fnv1a_64(msg)] = msg
+                key = str(fnv1a_64(msg))
+                if key in log_table:
+                    if log_table[key]["msg"] == msg:
+                        log_table[key]["latest_version"] = args.source_version
+                        continue
+
+                    print("COLLISION DETECTED!")
+                    print(f"Previous: {log_table[key]['msg']}")
+                    print(f"New: {msg}")
+                    continue
+
+                log_table[key] = {
+                    "msg": msg,
+                    "latest_version": args.source_version,
+                }
 
     with open(args.output, "w") as output_file:
         json.dump(log_table, output_file, indent=2)
@@ -85,5 +103,10 @@ if __name__ == "__main__":
         "--source_files",
         nargs="+",
         help="List of source files to parse for logging calls.",
+    )
+    arg_parser.add_argument(
+        "--source_version",
+        default="0.0.0",
+        help="Version of the source files.",
     )
     main(arg_parser.parse_args())

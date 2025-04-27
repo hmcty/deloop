@@ -19,9 +19,28 @@ static struct {
   I2C_HandleTypeDef i2c_handle;
 } _state;
 
+static void SAI_RxCpltCallback(SAI_HandleTypeDef *hsai) {
+  DELOOP_LOG_INFO("[WM8960] SAI Rx complete callback.");
+}
+
 static void SAI_ErrorCallback(SAI_HandleTypeDef *hsai) {
   volatile uint32_t error = HAL_SAI_GetError(hsai);
   (void)error;
+}
+
+static inline deloop::Error ConvertStatus(HAL_StatusTypeDef status) {
+  switch (status) {
+    case HAL_OK:
+      return deloop::Error::kOk;
+    case HAL_BUSY:
+      return deloop::Error::kSaiBusy;
+    case HAL_ERROR:
+      return deloop::Error::kSaiHalError;
+    case HAL_TIMEOUT:
+      return deloop::Error::kSaiTimeout;
+    default:
+      return deloop::Error::kSaiHalError;
+  }
 }
 
 deloop::Error deloop::WM8960::Init() {
@@ -47,6 +66,27 @@ deloop::Error deloop::WM8960::Init() {
     return deloop::Error::kFailedToInitializePeripheral;
   }
 
+  // Initialize SAI Rx.
+  __HAL_SAI_RESET_HANDLE_STATE(&_state.sai_rx_handle);
+  _state.sai_rx_handle.Instance = SAI1_Block_A;
+  __HAL_SAI_DISABLE(&_state.sai_rx_handle);
+
+  _state.sai_rx_handle.Init.AudioMode = SAI_MODESLAVE_RX;
+  _state.sai_rx_handle.Init.Synchro = SAI_SYNCHRONOUS;
+  _state.sai_rx_handle.Init.OutputDrive = SAI_OUTPUTDRIVE_DISABLE;
+  _state.sai_rx_handle.Init.NoDivider = SAI_MASTERDIVIDER_DISABLE;
+  _state.sai_rx_handle.Init.FIFOThreshold = SAI_FIFOTHRESHOLD_1QF;
+  // The following settings are applied by HAL_SAI_InitProtocol below:
+  // - Protocol, DataSize, FirstBit, ClockStrobing, etc.
+  _state.sai_rx_handle.Init.ClockSource = SAI_CLKSOURCE_PLLSAI;
+  _state.sai_rx_handle.Init.AudioFrequency = SAI_AUDIO_FREQUENCY_48K;
+
+  if (HAL_SAI_InitProtocol(&_state.sai_rx_handle, SAI_I2S_STANDARD, SAI_PROTOCOL_DATASIZE_24BIT, 2) != HAL_OK) {
+    DELOOP_LOG_ERROR("[WM8960] Failed to initialize SAI peripheral: %d",
+    (uint32_t) HAL_SAI_GetError(&_state.sai_rx_handle)); return
+    deloop::Error::kFailedToInitializePeripheral;
+  }
+
   // Initialize SAI Tx.
   __HAL_SAI_RESET_HANDLE_STATE(&_state.sai_tx_handle);
   _state.sai_tx_handle.Instance = SAI1_Block_B;
@@ -56,56 +96,32 @@ deloop::Error deloop::WM8960::Init() {
   _state.sai_tx_handle.Init.Synchro = SAI_ASYNCHRONOUS;
   _state.sai_tx_handle.Init.OutputDrive = SAI_OUTPUTDRIVE_ENABLE;
   _state.sai_tx_handle.Init.NoDivider = SAI_MASTERDIVIDER_ENABLE;
-  _state.sai_tx_handle.Init.FIFOThreshold = SAI_FIFOTHRESHOLD_FULL;
+  _state.sai_tx_handle.Init.FIFOThreshold = SAI_FIFOTHRESHOLD_1QF;
   // The following settings are applied by HAL_SAI_InitProtocol below:
   // - Protocol, DataSize, FirstBit, ClockStrobing, etc.
   _state.sai_tx_handle.Init.ClockSource = SAI_CLKSOURCE_PLLSAI;
-  _state.sai_tx_handle.Init.AudioFrequency = SAI_AUDIO_FREQUENCY_22K;
+  _state.sai_tx_handle.Init.AudioFrequency = SAI_AUDIO_FREQUENCY_48K;
 
   if (HAL_SAI_InitProtocol(&_state.sai_tx_handle, SAI_I2S_STANDARD, SAI_PROTOCOL_DATASIZE_24BIT, 2) != HAL_OK) {
     DELOOP_LOG_ERROR("[WM8960] Failed to initialize SAI peripheral: %d", (uint32_t) HAL_SAI_GetError(&_state.sai_tx_handle));
     return deloop::Error::kFailedToInitializePeripheral;
   }
 
-  HAL_SAI_RegisterCallback(&_state.sai_tx_handle, HAL_SAI_ERROR_CB_ID, SAI_ErrorCallback);
-
-  // Initialize SAI Rx.
-  // _state.sai_rx_handle.Instance = SAI1_Block_B;
-  // _state.sai_rx_handle.Init.AudioMode = SAI_MODESLAVE_RX;
-  // _state.sai_rx_handle.Init.Synchro = SAI_SYNCHRONOUS;
-  // _state.sai_rx_handle.Init.OutputDrive = SAI_OUTPUTDRIVE_ENABLE;
-  // _state.sai_rx_handle.Init.NoDivider = SAI_MASTERDIVIDER_ENABLE;
-  // _state.sai_rx_handle.Init.FIFOThreshold = SAI_FIFOTHRESHOLD_1QF;
-  // _state.sai_rx_handle.Init.ClockSource = SAI_CLKSOURCE_PLLSAI;
-  // _state.sai_rx_handle.Init.AudioFrequency = SAI_AUDIO_FREQUENCY_48K;
-  // _state.sai_rx_handle.Init.Protocol = I2S_STANDARD_PHILIPS;
-  // _state.sai_rx_handle.Init.DataSize = SAI_DATASIZE_24;
-  // _state.sai_rx_handle.Init.FirstBit = SAI_FIRSTBIT_MSB;
-  // _state.sai_rx_handle.Init.ClockStrobing = SAI_CLOCKSTROBING_RISINGEDGE;
-  // _state.sai_rx_handle.FrameInit.FrameLength = 32;
-  // _state.sai_rx_handle.FrameInit.ActiveFrameLength = 16;
-  // _state.sai_rx_handle.FrameInit.FSDefinition =
-  // SAI_FS_CHANNEL_IDENTIFICATION; _state.sai_rx_handle.FrameInit.FSPolarity =
-  // SAI_FS_ACTIVE_LOW; _state.sai_rx_handle.FrameInit.FSOffset =
-  // SAI_FS_BEFOREFIRSTBIT; _state.sai_rx_handle.SlotInit.FirstBitOffset = 0;
-  // _state.sai_rx_handle.SlotInit.SlotSize = SAI_SLOTSIZE_DATASIZE;
-  // _state.sai_rx_handle.SlotInit.SlotNumber = 2;
-  // _state.sai_rx_handle.SlotInit.SlotActive = (SAI_SLOTACTIVE_0 |
-  // SAI_SLOTACTIVE_1); if (HAL_SAI_Init(&_state.sai_rx_handle) != HAL_OK) {
-  //   DELOOP_LOG_ERROR("[WM8960] Failed to initialize SAI peripheral: %d",
-  //   (uint32_t) HAL_SAI_GetError(&_state.sai_rx_handle)); return
-  //   deloop::Error::kFailedToInitializePeripheral;
-  // }
+  // TODO: Configure callbacks.
 
   _state.initialized = true;
   return deloop::WM8960::ResetToDefaults();
 }
 
 deloop::Error deloop::WM8960::ResetToDefaults(void) {
-  DELOOP_LOG_INFO("[WM8960] Resetting to defaults...");
+  DELOOP_LOG_INFO("[WM8960] Resetting to defaults..");
 
   // Any write to the reset register will set all others to default.
   DELOOP_RETURN_IF_ERROR(deloop::WM8960::WriteRegister(WM8960_REG_ADDR_RESET, 0x01));
+
+  DELOOP_RETURN_IF_ERROR(deloop::WM8960::WriteRegister(
+    WM8960_REG_ADDR_ADC_DAC_CTL_1,
+    WM8960_REG_FLAG_ADC_DAC_CTL_1_DACMU_OFF));
 
   // Configure VMID divider for playback+recording, enable VREF (required for
   // ADC/DAC), and power on L/R ADCs.
@@ -118,14 +134,34 @@ deloop::Error deloop::WM8960::ResetToDefaults(void) {
     WM8960_REG_FLAG_POWER_MGMT_1_ADCL_ON |
     WM8960_REG_FLAG_POWER_MGMT_1_ADCR_ON));
 
-  // TODO: Configure POWER_MGMT_2 here for DAC support.
+  DELOOP_RETURN_IF_ERROR(deloop::WM8960::WriteRegister(
+    WM8960_REG_ADDR_POWER_MGMT_2,
+    WM8960_REG_FLAG_POWER_MGMT_2_DACL_ON |
+    WM8960_REG_FLAG_POWER_MGMT_2_DACR_ON |
+    WM8960_REG_FLAG_POWER_MGMT_2_SPKL_ON |
+    WM8960_REG_FLAG_POWER_MGMT_2_SPKR_ON));
 
   DELOOP_RETURN_IF_ERROR(deloop::WM8960::WriteRegister(
     WM8960_REG_ADDR_POWER_MGMT_3,
     WM8960_REG_FLAG_POWER_MGMT_3_LMIC_ON |
-    WM8960_REG_FLAG_POWER_MGMT_3_RMIC_ON));
+    WM8960_REG_FLAG_POWER_MGMT_3_RMIC_ON |
+    WM8960_REG_FLAG_POWER_MGMT_3_LOMIX_ON |
+    WM8960_REG_FLAG_POWER_MGMT_3_ROMIX_ON));
 
-  // TODO: Add additional mixer and power management configuration for DAC
+  DELOOP_RETURN_IF_ERROR(deloop::WM8960::WriteRegister(
+    WM8960_REG_ADDR_LEFT_OUT_MIX,
+    WM8960_REG_FLAG_LEFT_OUT_MIX_LD2LO_ON));
+
+  DELOOP_RETURN_IF_ERROR(deloop::WM8960::WriteRegister(
+    WM8960_REG_ADDR_RIGHT_OUT_MIX,
+    WM8960_REG_FLAG_RIGHT_OUT_MIX_RD2RO_ON));
+
+  DELOOP_RETURN_IF_ERROR(deloop::WM8960::WriteRegister(
+    WM8960_REG_ADDR_CLASS_D_CTL_1,
+    WM8960_REG_FLAG_CLASS_D_CTL_1_SPK_OP_EN_BOTH));
+
+  __HAL_SAI_ENABLE(&_state.sai_tx_handle);
+  __HAL_SAI_ENABLE(&_state.sai_rx_handle);
 
   return deloop::Error::kOk;
 }
@@ -139,8 +175,20 @@ deloop::Error deloop::WM8960::WriteRegister(uint8_t reg_addr, uint16_t data) {
 
   uint8_t ctrl_data[2] = {static_cast<uint8_t>((reg_addr << 1) | ((data >> 8) & 0x01)),
                           static_cast<uint8_t>(data & 0xFF)};
-  auto status = HAL_I2C_Master_Transmit(&_state.i2c_handle, WM8960_I2C_ADDR,
+  int retry_attempts = 3;
+  HAL_StatusTypeDef status = HAL_OK;
+  while (retry_attempts--) {
+    status = HAL_I2C_Master_Transmit(&_state.i2c_handle, WM8960_I2C_ADDR,
                                         ctrl_data, 2, 1000);
+    if (status == HAL_OK) {
+      break;
+    } else if (retry_attempts == 0) {
+      DELOOP_LOG_ERROR(
+        "[WM8960] Failed to write to register 0x%02X: 0x%02X", reg_addr, data);
+      break;
+    }
+  }
+
   switch (status) {
   case HAL_OK:
     return deloop::Error::kOk;
@@ -155,32 +203,67 @@ deloop::Error deloop::WM8960::WriteRegister(uint8_t reg_addr, uint16_t data) {
   }
 }
 
-deloop::Error deloop::WM8960::ExchangeData(uint8_t *tx, uint8_t *rx, uint16_t size) {
-  (void)rx;  // Parameter currently unused
+deloop::Error deloop::WM8960::StartRecording(uint8_t *buf, uint16_t size) {
+  if (!_state.initialized) {
+    return deloop::Error::kNotInitialized;
+  } else if (buf == nullptr || size == 0) {
+    return deloop::Error::kInvalidArgument;
+  }
 
+  return ConvertStatus(HAL_SAI_Receive_DMA(&_state.sai_rx_handle, buf, size));
+}
+
+deloop::Error deloop::WM8960::StopRecording(void) {
   if (!_state.initialized) {
     return deloop::Error::kNotInitialized;
   }
 
-  __HAL_SAI_ENABLE(&_state.sai_tx_handle);
-  auto status = HAL_SAI_Transmit_DMA(&_state.sai_tx_handle, tx, size);
-  switch (status) {
-  case HAL_OK:
-    return deloop::Error::kOk;
-  case HAL_BUSY:
-    return deloop::Error::kSaiBusy;
-  case HAL_ERROR:
-    return deloop::Error::kSaiHalError;
-  case HAL_TIMEOUT:
-    return deloop::Error::kSaiTimeout;
-  default:
-    return deloop::Error::kSaiHalError;
-  }
+  return ConvertStatus(HAL_SAI_DMAStop(&_state.sai_rx_handle));
 }
 
-// TODO: Implement these functions when needed:
-// - SetVolume: Set volume level
-// - Play: Start audio playback
-// - Pause: Pause audio playback
-// - Stop: Stop audio playback
-// - Write: Write audio data to DAC
+deloop::Error deloop::WM8960::StartPlayback(uint8_t *buf, uint16_t size) {
+  if (!_state.initialized) {
+    return deloop::Error::kNotInitialized;
+  } else if (buf == nullptr || size == 0) {
+    return deloop::Error::kInvalidArgument;
+  }
+
+  return ConvertStatus(HAL_SAI_Transmit_DMA(&_state.sai_tx_handle, buf, size));
+}
+
+deloop::Error deloop::WM8960::StopPlayback(void) {
+  if (!_state.initialized) {
+    return deloop::Error::kNotInitialized;
+  }
+
+  return ConvertStatus(HAL_SAI_DMAStop(&_state.sai_tx_handle));
+}
+
+deloop::Error deloop::WM8960::SetVolume(float volume) {
+  if (!_state.initialized) {
+    return deloop::Error::kNotInitialized;
+  } else if (volume < 0.0f || volume > 1.0f) {
+    return deloop::Error::kInvalidArgument;
+  }
+
+  const int kMaxVolume_dB = WM8960_REG_FLAG_RIGHT_SPKR_VOL_SPKRVOL_MAX_dB;
+  const int kMinVolume_dB = WM8960_REG_FLAG_RIGHT_SPKR_VOL_SPKRVOL_MIN_dB;
+  const int kVolumeRange_dB = kMaxVolume_dB - kMinVolume_dB;
+
+  // Convert volume percentage to dB.
+  int volume_dB = static_cast<int>(kMinVolume_dB + (kVolumeRange_dB * volume));
+  volume_dB = std::max(kMinVolume_dB, std::min(kMaxVolume_dB, volume_dB));
+
+  uint16_t volume_flag = WM8960_REG_FLAG_RIGHT_SPKR_VOL_SPKRVOL(volume_dB);
+  DELOOP_RETURN_IF_ERROR(WriteRegister(
+    WM8960_REG_ADDR_LEFT_SPKR_VOL,
+    volume_flag));
+
+  DELOOP_RETURN_IF_ERROR(WriteRegister(
+    WM8960_REG_ADDR_RIGHT_SPKR_VOL,
+    WM8960_REG_FLAG_RIGHT_SPKR_VOL_SPKVU |  // Required to take effect.
+    volume_flag));
+
+  DELOOP_LOG_INFO("[WM8960] Volume set to 0x%04X (%d dB)", volume_flag, volume_dB);
+  return deloop::Error::kOk;
+}

@@ -38,12 +38,19 @@ class Mk0Stream(Protocol):
 
     def __init__(self):
         self.transport = None
-        with open(LOG_TABLE_FILE, "r") as file:
-            self.log_table = json.load(file)
 
+        self.load_log_table()
         self.start_byte_received = False
         self.data_remaining = None
         self.buffer = bytearray()
+
+    def load_log_table(self) -> None:
+        try:
+            with open(LOG_TABLE_FILE, "r") as file:
+                self.log_table = json.load(file)
+        except FileNotFoundError:
+            logger.warning(f"Log table file not found: {LOG_TABLE_FILE}")
+            self.log_table = {}
 
     def connection_made(self, transport: ReaderThread) -> None:
         logger.info("Connected to device.")
@@ -107,17 +114,16 @@ class Mk0Stream(Protocol):
 
     def handle_log(self, log: log_pb2.LogRecord) -> None:
         level = log_pb2.LogLevel.Name(log.level)
-        msg = self.log_table.get(str(log.hash))
-        if msg is None:
+        entry = self.log_table.get(str(log.hash))
+        if entry is None:
             logger.warning(f"Unknown hash: {log.hash}")
             return
 
         args = self.parse_log_args(log.args)
-        logger.log(logging.getLevelName(level), msg, *args)
+        logger.log(logging.getLevelName(level), entry["msg"], *args)
 
     def handle_packet(self, packet: bytes) -> None:
         try:
-            # print(f"Received packet: {packet}")
             stream = stream_pb2.StreamPacket()
             stream.ParseFromString(packet)
             if stream.HasField("log"):

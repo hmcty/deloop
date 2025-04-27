@@ -1,9 +1,62 @@
 {
-  "966162262948479881": "Failed to initialize WM8960: %d",
-  "16235888736721373036": "Starting core loop...",
-  "2106723538767770478": "Core loop...",
-  "16928921907232488655": "[WM8960] Initializing...",
-  "8010726201827881308": "[WM8960] Failed to initialize I2C peripheral.",
-  "755622758604016128": "[WM8960] Failed to initialize SAI peripheral: %d",
-  "12009604518402858070": "[WM8960] Resetting to defaults..."
+  "966162262948479881": {
+    "msg": "Failed to initialize WM8960: %d",
+    "latest_version": "0.2.0"
+  },
+  "16235888736721373036": {
+    "msg": "Starting core loop...",
+    "latest_version": "0.2.0"
+  },
+  "7467477190116343306": {
+    "msg": "Failed to set volume: %d",
+    "latest_version": "0.2.0"
+  },
+  "17703790939935358401": {
+    "msg": "Failed to start playback: %d",
+    "latest_version": "0.2.0"
+  },
+  "7397074153173428353": {
+    "msg": "Failed to start recording: %d",
+    "latest_version": "0.2.0"
+  },
+  "13472643645345112721": {
+    "msg": "Data: %02x %02x %02x %02x",
+    "latest_version": "0.2.0"
+  },
+  "4981186662785333881": {
+    "msg": "Failed to exchange data: %d",
+    "latest_version": "0.2.0"
+  },
+  "8035607851684678163": {
+    "msg": "[WM8960] SAI Rx complete callback.",
+    "latest_version": "0.2.0"
+  },
+  "16928921907232488655": {
+    "msg": "[WM8960] Initializing...",
+    "latest_version": "0.2.0"
+  },
+  "8010726201827881308": {
+    "msg": "[WM8960] Failed to initialize I2C peripheral.",
+    "latest_version": "0.2.0"
+  },
+  "755622758604016128": {
+    "msg": "[WM8960] Failed to initialize SAI peripheral: %d",
+    "latest_version": "0.2.0"
+  },
+  "9206641012784212860": {
+    "msg": "[WM8960] Resetting to defaults..",
+    "latest_version": "0.2.0"
+  },
+  "15679225499730272149": {
+    "msg": "[WM8960] Failed to write to  register 0x%02X: 0x%02X",
+    "latest_version": "0.1.0"
+  },
+  "11396981336495991574": {
+    "msg": "[WM8960] Volume set to 0x%04X (%d dB)",
+    "latest_version": "0.2.0"
+  },
+  "5037338741041400909": {
+    "msg": "[WM8960] Failed to write to register 0x%02X: 0x%02X",
+    "latest_version": "0.2.0"
+  }
 }

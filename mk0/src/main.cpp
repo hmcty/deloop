@@ -16,6 +16,8 @@
 #include "drv/wm8960.hpp"
 #include "tasks/tasks.hpp"
 
+const uint16_t kAudioBufSize = 100;
+
 static void ConfigureSystemClock(void);
 static void ErrorHandler(void);
 static void CoreLoopTask(void *pvParameters);
@@ -23,8 +25,6 @@ static void CoreLoopTask(void *pvParameters);
 const size_t task_stack_size = configMINIMAL_STACK_SIZE * 2;
 static StaticTask_t task_buffer;
 static StackType_t task_stack[task_stack_size];
-
-static uint32_t tx_data[22000] = {0};
 
 int main(void) {
   // STM32F4xx HAL library initialization:
@@ -74,10 +74,23 @@ static void CoreLoopTask(void *pvParameters) {
 
   DELOOP_LOG_INFO("Starting core loop...");
 
-  uint8_t data[4] = {0};
-  deloop::WM8960::ExchangeData((uint8_t *) tx_data, data, 22000);
+  auto error = deloop::WM8960::SetVolume(0.60f);
+  if (error != deloop::Error::kOk) {
+    DELOOP_LOG_ERROR("Failed to set volume: %d", error);
+  }
+
+  static uint32_t audio_buf[kAudioBufSize] = {0};
+  error = deloop::WM8960::StartPlayback((uint8_t *) audio_buf, kAudioBufSize);
+  if (error != deloop::Error::kOk) {
+    DELOOP_LOG_ERROR("Failed to start playback: %d", error);
+  }
+
+  error = deloop::WM8960::StartRecording((uint8_t *) audio_buf, kAudioBufSize);
+  if (error != deloop::Error::kOk) {
+    DELOOP_LOG_ERROR("Failed to start recording: %d", error);
+  }
+
   while (1) {
-    DELOOP_LOG_INFO("Core loop...");
     vTaskDelay(100);
   }
 }

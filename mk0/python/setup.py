@@ -10,6 +10,7 @@ setup(
         "grpcio-tools",
         "cmd2",
         "tabulate",
+        "pyinotify",
     ],
     package_data={"deloop_mk0": ["**/*.json"]},
     py_modules=["log_pb2", "stream_pb2"],

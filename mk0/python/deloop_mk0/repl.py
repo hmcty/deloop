@@ -3,11 +3,14 @@
 import argparse
 import logging
 import threading
+from contextlib import ExitStack
 from logging.handlers import QueueHandler
 from queue import Queue
 
 import cmd2
-from deloop_mk0.uart_stream import Mk0Stream, add_uart_args, open_uart_stream
+import pyinotify
+from deloop_mk0.uart_stream import (LOG_TABLE_FILE, Mk0Stream, add_uart_args,
+                                    open_uart_stream)
 from deloop_mk0.utils import ColoredFormatter
 
 logger = logging.getLogger()  # Root logger
@@ -21,10 +24,23 @@ formatter = ColoredFormatter("%(asctime)s | %(levelname)8s | %(message)s")
 handler.setFormatter(formatter)
 
 
+class OnWriteHandler(pyinotify.ProcessEvent):
+
+    def my_init(self, stream: Mk0Stream) -> None:
+        self._stream = stream
+
+    def process_IN_CLOSE_WRITE(self, event) -> None:
+        if event.pathname != str(LOG_TABLE_FILE):
+            return
+
+        logger.info("Sources changed. Reloading...")
+        self._stream.load_log_table()
+
+
 class Mk0Cmd(cmd2.Cmd):
 
     def __init__(self, stream: Mk0Stream, log_queue: Queue):
-        super().__init__()
+        super().__init__(allow_cli_args=False)
         self.prompt = "Mk0> "
         self.allow_style = cmd2.ansi.AllowStyle.TERMINAL
 
@@ -95,9 +111,22 @@ class Mk0Cmd(cmd2.Cmd):
 def main() -> None:
     parser = argparse.ArgumentParser()
     add_uart_args(parser)
+    parser.add_argument(
+        "--hotreload",
+        action="store_true",
+        help="Enable hot reloading of log table files.",
+    )
     args = parser.parse_args()
 
-    with open_uart_stream(args) as mk0_stream:
+    with ExitStack() as stack, open_uart_stream(args) as mk0_stream:
+        if args.hotreload:
+            wm = pyinotify.WatchManager()
+            handler = OnWriteHandler(stream=mk0_stream)
+            notifier = pyinotify.ThreadedNotifier(wm, default_proc_fun=handler)
+            wm.add_watch(str(LOG_TABLE_FILE), pyinotify.ALL_EVENTS)
+            notifier.start()
+            stack.callback(notifier.stop)
+
         cmd = Mk0Cmd(mk0_stream, log_queue)
         cmd.cmdloop()
 

@@ -1,14 +1,14 @@
+import json
+import sys
+import tempfile
 import unittest
+from pathlib import Path
 from unittest import mock
 from unittest.mock import mock_open, patch
-import tempfile
-import json
-import os
-from pathlib import Path
-import sys
 
 sys.path.append(str(Path(__file__).parent.parent / "scripts"))
-import create_log_table
+import create_log_table  # noqa: E402
+
 
 class TestCreateLogTable(unittest.TestCase):
 
@@ -75,26 +75,36 @@ class TestCreateLogTable(unittest.TestCase):
         macros: list[str],
         expected_logs: list[str],
     ) -> None:
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".c", delete=False) as tmp:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            suffix=".c",
+            delete=False,
+        ) as tmp:
             tmp.write(content)
             tmp_path = tmp.name
 
-        with tempfile.NamedTemporaryFile(mode="r+", suffix=".json", delete=False) as output_tmp:
+        with tempfile.NamedTemporaryFile(
+            mode="r+",
+            suffix=".json",
+            delete=False,
+        ) as output_tmp:
             args = mock.Mock()
             args.macro = macros
             args.source_files = [tmp_path]
+            args.source_version = "1.0.0"
             args.output = output_tmp.name
 
             with patch("builtins.print") as mock_print:
                 create_log_table.main(args)
                 mock_print.assert_any_call(
-                    f"Wrote {len(expected_logs)} log calls to {output_tmp.name}"
+                    f"Wrote {len(expected_logs)} log "
+                    f"calls to {output_tmp.name}"
                 )
 
             result = json.load(output_tmp)
             for k, v in result.items():
-                self.assertIn(v, expected_logs)
-                self.assertEqual(int(k), create_log_table.fnv1a_64(v))
+                self.assertIn(v["msg"], expected_logs)
+                self.assertEqual(int(k), create_log_table.fnv1a_64(v["msg"]))
 
 
 if __name__ == '__main__':
