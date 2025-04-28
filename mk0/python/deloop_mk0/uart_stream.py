@@ -4,6 +4,7 @@ import argparse
 import importlib
 import json
 import logging
+import struct
 from contextlib import contextmanager
 from typing import Final, Generator
 
@@ -13,6 +14,7 @@ from serial.tools import list_ports
 from tabulate import tabulate
 
 try:
+    import command_pb2
     import log_pb2
     import stream_pb2
 except ImportError as e:
@@ -36,6 +38,9 @@ class Mk0Stream(Protocol):
     data_remaining: int | None
     buffer: bytearray
 
+    last_cmd_id: int
+    outstanding_cmds: dict[int, callable]
+
     def __init__(self):
         self.transport = None
 
@@ -43,6 +48,8 @@ class Mk0Stream(Protocol):
         self.start_byte_received = False
         self.data_remaining = None
         self.buffer = bytearray()
+        self.last_cmd_id = 0
+        self.outstanding_cmds = {}
 
     def load_log_table(self) -> None:
         try:
@@ -59,6 +66,7 @@ class Mk0Stream(Protocol):
 
     def connection_lost(self, exc) -> None:
         self.transport = None
+        logger.info("Disconnected from device.")
         super().connection_lost(exc)
 
     def data_received(self, data: bytes) -> None:
@@ -122,15 +130,123 @@ class Mk0Stream(Protocol):
         args = self.parse_log_args(log.args)
         logger.log(logging.getLevelName(level), entry["msg"], *args)
 
+    def handle_command_response(self, cmd: command_pb2.Command) -> None:
+        if cmd.cmd_id in self.outstanding_cmds:
+            callback = self.outstanding_cmds.pop(cmd.cmd_id)
+            if callback:
+                callback(cmd)
+
+        else:
+            logger.warning(f"Unknown command ID: {cmd.cmd_id}")
+
     def handle_packet(self, packet: bytes) -> None:
         try:
             stream = stream_pb2.StreamPacket()
             stream.ParseFromString(packet)
             if stream.HasField("log"):
                 self.handle_log(stream.log)
+            elif stream.HasField("cmd_response"):
+                self.handle_command_response(stream.cmd_response)
 
         except Exception as e:
             logger.exception(f"Error: {e}")
+
+    def _send_command(self, cmd, success_msg=None, error_msg=None):
+        """
+        Common method to send commands to the device.
+
+        Args:
+            cmd: The command protobuf object to send
+            success_msg: Optional message to log on success
+            error_msg: Optional message to log on error
+
+        Returns:
+            bool: True if command was sent successfully, False otherwise
+        """
+        cmd_bytes = cmd.SerializeToString()
+
+        try:
+            payload = struct.pack("<BB", self.MAGIC_BYTE, len(cmd_bytes))
+            payload += cmd_bytes
+
+            bytes_written = self.transport.write(payload)
+            if bytes_written != len(payload):
+                logger.error("Failed to write command to device.")
+                del self.outstanding_cmds[cmd.cmd_id]
+                return False
+
+            if success_msg:
+                logger.info(success_msg)
+            return True
+
+        except Exception as e:
+            logger.exception(f"Error writing to device: {e}")
+            del self.outstanding_cmds[cmd.cmd_id]
+            return False
+
+    def _create_command(self, callback=None):
+        """
+        Create a new command with incremented ID and register callback.
+
+        Args:
+            callback: Function to call when response is received
+
+        Returns:
+            command_pb2.Command: New command object with ID assigned
+        """
+        cmd = command_pb2.Command()
+        cmd.cmd_id = self.last_cmd_id + 1
+        self.last_cmd_id = cmd.cmd_id
+
+        if callback:
+            self.outstanding_cmds[cmd.cmd_id] = callback
+
+        return cmd
+
+    def configure_recording(self, enable: bool) -> None:
+        """Configure audio recording on the device."""
+
+        def cmd_cb(resp):
+            if resp.status == command_pb2.CommandStatus.SUCCESS:
+                logger.info("Recording configured successfully.")
+            else:
+                logger.error(f"Failed to configure recording: {resp.status}")
+
+        cmd = self._create_command(cmd_cb)
+        cmd.configure_recording.enable = enable
+
+        self._send_command(cmd)
+
+    def configure_playback(self, enable: bool) -> None:
+        """Configure audio playback on the device."""
+
+        def cmd_cb(resp):
+            if resp.status == command_pb2.CommandStatus.SUCCESS:
+                logger.info("Playback configured successfully.")
+            else:
+                logger.error(f"Failed to configure playback: {resp.status}")
+
+        cmd = self._create_command(cmd_cb)
+        cmd.configure_playback.enable = enable
+
+        self._send_command(cmd)
+
+    def reset_device(self) -> None:
+        """Send a reset command to the device."""
+
+        def cmd_cb(resp):
+            if resp.status == command_pb2.CommandStatus.SUCCESS:
+                logger.info("Device reset command sent successfully.")
+            else:
+                logger.error(f"Failed to reset device: {resp.status}")
+
+        cmd = self._create_command(cmd_cb)
+        cmd.reset.SetInParent()  # Initialize the reset message
+
+        self._send_command(
+            cmd,
+            success_msg="Reset command sent. Device will reset momentarily.",
+        )
 
 
 def select_port() -> str:

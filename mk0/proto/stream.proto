@@ -1,10 +1,11 @@
 syntax = "proto3";
 
 import "log.proto";
+import "command.proto";
 
 message StreamPacket {
   oneof payload {
     LogRecord log = 1;
-    // Add more types here
+    CommandResponse cmd_response = 2;
   }
 }

@@ -9,6 +9,8 @@
 #include "FreeRTOSConfig.h"
 #include "task.h"
 
+#include "command.pb.h"
+
 #include "logging.hpp"
 
 #include "uart_stream.hpp"
@@ -16,15 +18,22 @@
 #include "drv/wm8960.hpp"
 #include "tasks/tasks.hpp"
 
-const uint16_t kAudioBufSize = 100;
-
 static void ConfigureSystemClock(void);
+static void ConfigureHALPeripherals(void);
 static void ErrorHandler(void);
+static void CommandHandler(const Command &cmd);
 static void CoreLoopTask(void *pvParameters);
 
 const size_t task_stack_size = configMINIMAL_STACK_SIZE * 2;
 static StaticTask_t task_buffer;
 static StackType_t task_stack[task_stack_size];
+
+const uint16_t kAudioBufSize = 100;
+static uint32_t audio_buf[kAudioBufSize] = {0};
+static bool recording = false;
+static bool playback = false;
+
+UART_HandleTypeDef uart2_handle;
 
 int main(void) {
   // STM32F4xx HAL library initialization:
@@ -37,11 +46,14 @@ int main(void) {
   //    - Low Level Initialization
   HAL_Init();
   ConfigureSystemClock();
+  ConfigureHALPeripherals();
 
-  deloop::Error err = deloop::UartStream::Init();
+  deloop::Error err = deloop::UartStream::Init(&uart2_handle);
   if (err != deloop::Error::kOk) {
     ErrorHandler();
   }
+
+  deloop::UartStream::RegisterCommandHandler(CommandHandler);
 
   // Initialize LED.
   __HAL_RCC_GPIOA_CLK_ENABLE();
@@ -67,32 +79,6 @@ int main(void) {
 
   // Infinite loop. We should never get here.
   while (1) {}
-}
-
-static void CoreLoopTask(void *pvParameters) {
-  (void)pvParameters;
-
-  DELOOP_LOG_INFO("Starting core loop...");
-
-  auto error = deloop::WM8960::SetVolume(0.60f);
-  if (error != deloop::Error::kOk) {
-    DELOOP_LOG_ERROR("Failed to set volume: %d", error);
-  }
-
-  static uint32_t audio_buf[kAudioBufSize] = {0};
-  error = deloop::WM8960::StartPlayback((uint8_t *) audio_buf, kAudioBufSize);
-  if (error != deloop::Error::kOk) {
-    DELOOP_LOG_ERROR("Failed to start playback: %d", error);
-  }
-
-  error = deloop::WM8960::StartRecording((uint8_t *) audio_buf, kAudioBufSize);
-  if (error != deloop::Error::kOk) {
-    DELOOP_LOG_ERROR("Failed to start recording: %d", error);
-  }
-
-  while (1) {
-    vTaskDelay(100);
-  }
 }
 
 // System Clock Configuration.
@@ -151,10 +137,153 @@ static void ConfigureSystemClock(void) {
   }
 }
 
+static void ConfigureHALPeripherals(void) {
+  // USART2
+  uart2_handle.Instance = USART2;
+  uart2_handle.Init.BaudRate = 115200;
+  uart2_handle.Init.WordLength = UART_WORDLENGTH_8B;
+  uart2_handle.Init.StopBits = UART_STOPBITS_1;
+  uart2_handle.Init.Parity = UART_PARITY_NONE;
+  uart2_handle.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  uart2_handle.Init.Mode = UART_MODE_TX_RX;
+  if (HAL_UART_Init(&uart2_handle) != HAL_OK) {
+    ErrorHandler();
+  }
+
+  HAL_NVIC_SetPriority(USART2_IRQn, 5, 0);
+  HAL_NVIC_EnableIRQ(USART2_IRQn);
+
+  // TODO: SAI2
+}
+
 static void ErrorHandler(void) {
   // Flash LED to indicate error
   HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_SET);
   while (1) {
     // Infinite loop
+  }
+}
+
+static void CommandHandler(const Command &cmd) {
+  switch (cmd.which_request) {
+    case Command_reset_tag:
+      // Call soft reset function
+      NVIC_SystemReset();
+      break;
+
+    case Command_configure_recording_tag:
+      if (cmd.request.configure_recording.enable != recording) {
+        auto error = deloop::WM8960::StopRecording();
+        if (error != deloop::Error::kOk) {
+          DELOOP_LOG_ERROR_FROM_ISR("Failed to stop recording: %d", error);
+          deloop::UartStream::SendCommandResponse(
+              CommandResponse{
+                .cmd_id = cmd.cmd_id,
+                .status = CommandStatus_ERR_INTERNAL,
+              },
+              /*blocking=*/false
+          );
+          break;
+        }
+
+        recording = cmd.request.configure_recording.enable;
+        if (recording) {
+          error = deloop::WM8960::StartRecording((uint8_t *) audio_buf, kAudioBufSize);
+          if (error != deloop::Error::kOk) {
+            DELOOP_LOG_ERROR_FROM_ISR("Failed to start recording: %d", error);
+            deloop::UartStream::SendCommandResponse(
+                CommandResponse{
+                  .cmd_id = cmd.cmd_id,
+                  .status = CommandStatus_ERR_INTERNAL,
+                },
+                /*blocking=*/false
+            );
+            recording = false;
+            break;
+          }
+
+          DELOOP_LOG_INFO_FROM_ISR("Successfully started recording");
+        }
+
+        deloop::UartStream::SendCommandResponse(
+            CommandResponse{
+              .cmd_id = cmd.cmd_id,
+              .status = CommandStatus_SUCCESS,
+            },
+            /*blocking=*/false
+        );
+      }
+      break;
+    case Command_configure_playback_tag:
+      if (cmd.request.configure_playback.enable != playback) {
+        auto error = deloop::WM8960::StopPlayback();
+        if (error != deloop::Error::kOk) {
+          DELOOP_LOG_ERROR_FROM_ISR("Failed to stop playback: %d", error);
+          deloop::UartStream::SendCommandResponse(
+              CommandResponse{
+                .cmd_id = cmd.cmd_id,
+                .status = CommandStatus_ERR_INTERNAL,
+              },
+              /*blocking=*/false
+          );
+          break;
+        }
+
+        playback = cmd.request.configure_playback.enable;
+        if (playback) {
+          error = deloop::WM8960::StartPlayback((uint8_t *) audio_buf, kAudioBufSize);
+          if (error != deloop::Error::kOk) {
+            DELOOP_LOG_ERROR_FROM_ISR("Failed to start playback: %d", error);
+            deloop::UartStream::SendCommandResponse(
+                CommandResponse{
+                  .cmd_id = cmd.cmd_id,
+                  .status = CommandStatus_ERR_INTERNAL,
+                },
+                /*blocking=*/false
+            );
+            playback = false;
+            break;
+          }
+
+          DELOOP_LOG_INFO_FROM_ISR("Successfully started playback");
+        }
+
+        deloop::UartStream::SendCommandResponse(
+            CommandResponse{
+              .cmd_id = cmd.cmd_id,
+              .status = CommandStatus_SUCCESS,
+            },
+            /*blocking=*/false
+        );
+      }
+      break;
+    default:
+      DELOOP_LOG_ERROR_FROM_ISR("Unknown command received");
+      break;
+  }
+}
+
+static void CoreLoopTask(void *pvParameters) {
+  (void)pvParameters;
+
+  DELOOP_LOG_INFO("Starting core loop...");
+
+  auto error = deloop::WM8960::SetVolume(0.60f);
+  if (error != deloop::Error::kOk) {
+    DELOOP_LOG_ERROR("Failed to set volume: %d", error);
+  }
+
+//error = deloop::WM8960::StartPlayback((uint8_t *) audio_buf, kAudioBufSize);
+//if (error != deloop::Error::kOk) {
+//  DELOOP_LOG_ERROR("Failed to start playback: %d", error);
+//}
+
+//error = deloop::WM8960::StartRecording((uint8_t *) audio_buf, kAudioBufSize);
+//if (error != deloop::Error::kOk) {
+//  DELOOP_LOG_ERROR("Failed to start recording: %d", error);
+//}
+
+  while (1) {
+    vTaskDelay(100);
   }
 }

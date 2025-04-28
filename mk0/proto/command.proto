@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+enum CommandStatus {
+  SUCCESS = 0;
+  ERR_UNSUPPORTED_COMMAND = 1;
+  ERR_INVALID_PARAMETER = 2;
+  ERR_INTERNAL = 3;
+}
+
+message Command {
+  uint32 cmd_id = 1;
+  oneof request {
+    ResetCommand reset = 2;
+    ConfigureRecordingCommand configure_recording = 3;
+    ConfigurePlaybackCommand configure_playback = 4;
+  }
+}
+
+message CommandResponse {
+  uint32 cmd_id = 1;
+  CommandStatus status = 2;
+}
+
+message ResetCommand {}
+
+message ConfigureRecordingCommand {
+  bool enable = 1;
+}
+
+message ConfigurePlaybackCommand {
+  bool enable = 1;
+}

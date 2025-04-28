@@ -84,6 +84,40 @@ class Mk0Cmd(cmd2.Cmd):
         else:
             print("Logs are already disabled.")
 
+    def do_enable_recording(self, _) -> None:
+        """Enable recording of audio on the device."""
+
+        self._stream.configure_recording(enable=True)
+
+    def do_disable_recording(self, _) -> None:
+        """Disable recording of audio on the device."""
+
+        self._stream.configure_recording(enable=False)
+
+    def do_enable_playback(self, _) -> None:
+        """Enable audio playback on the device."""
+
+        self._stream.configure_playback(enable=True)
+
+    def do_disable_playback(self, _) -> None:
+        """Disable audio playback on the device."""
+
+        self._stream.configure_playback(enable=False)
+
+    def do_reset(self, _) -> None:
+        """Reset the device (performs a soft reset)."""
+
+        print(
+            "Are you sure you want to reset the device? (y/n) ",
+            end="",
+            flush=True,
+        )
+        response = input().lower()
+        if response in ['y', 'yes']:
+            self._stream.reset_device()
+        else:
+            print("Reset cancelled.")
+
     def _preloop_hook(self) -> None:
         self._stop_event.clear()
         self._log_thread = threading.Thread(target=self._log_thread_loop)

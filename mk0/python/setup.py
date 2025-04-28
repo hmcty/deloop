@@ -13,7 +13,7 @@ setup(
         "pyinotify",
     ],
     package_data={"deloop_mk0": ["**/*.json"]},
-    py_modules=["log_pb2", "stream_pb2"],
+    py_modules=["log_pb2", "stream_pb2", "command_pb2"],
     entry_points={
         "console_scripts": [
             "deloop_mk0_repl = deloop_mk0.repl:main",

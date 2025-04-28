@@ -58,5 +58,61 @@
   "5037338741041400909": {
     "msg": "[WM8960] Failed to write to register 0x%02X: 0x%02X",
     "latest_version": "0.2.0"
+  },
+  "1323059212765809756": {
+    "msg": "Received command: %d",
+    "latest_version": "0.2.0"
+  },
+  "1763759043371154615": {
+    "msg": "UART RX complete callback",
+    "latest_version": "0.2.0"
+  },
+  "15374549110968507170": {
+    "msg": "Start byte received",
+    "latest_version": "0.2.0"
+  },
+  "15676728218401913260": {
+    "msg": "Command length byte received: %d",
+    "latest_version": "0.2.0"
+  },
+  "9717027981675796312": {
+    "msg": "Failed to decode command",
+    "latest_version": "0.2.0"
+  },
+  "7937732262986153794": {
+    "msg": "Received command!",
+    "latest_version": "0.2.0"
+  },
+  "16498210682059729996": {
+    "msg": "Configure recording command received",
+    "latest_version": "0.2.0"
+  },
+  "4208920490184759556": {
+    "msg": "Configure playback command received",
+    "latest_version": "0.2.0"
+  },
+  "12028541261731044371": {
+    "msg": "Unknown command received",
+    "latest_version": "0.2.0"
+  },
+  "1113806391295843639": {
+    "msg": "Failed to stop recording: %d",
+    "latest_version": "0.2.0"
+  },
+  "9755926389740311194": {
+    "msg": "Failed to start recording",
+    "latest_version": "0.2.0"
+  },
+  "3722893999432676030": {
+    "msg": "Successfully started recording",
+    "latest_version": "0.2.0"
+  },
+  "16987161098783649399": {
+    "msg": "Failed to stop playback: %d",
+    "latest_version": "0.2.0"
+  },
+  "5956356197285722054": {
+    "msg": "Successfully started playback",
+    "latest_version": "0.2.0"
   }
 }

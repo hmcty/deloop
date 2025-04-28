@@ -1,6 +1,11 @@
 #include "stm32f4xx_it.h"
+#include "stm32f4xx_hal.h"
+#include "stm32f4xx_hal_uart.h"
 
 #include <stdint.h>
+
+/* External variables --------------------------------------------------------*/
+extern UART_HandleTypeDef uart2_handle;
 
 /******************************************************************************/
 /*            Cortex-M4 Processor Exceptions Handlers                         */
@@ -91,6 +96,15 @@ void DebugMon_Handler(void) {}
 /*  available peripheral interrupt handler's name please refer to the startup */
 /*  file (startup_stm32f4xx.s).                                               */
 /******************************************************************************/
+
+/**
+ * @brief  This function handles USART2 interrupt request.
+ * @param  None
+ * @retval None
+ */
+void USART2_IRQHandler(void) {
+  HAL_UART_IRQHandler(&uart2_handle);
+}
 
 /**
  * @brief  This function handles PPP interrupt request.

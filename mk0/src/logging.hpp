@@ -6,18 +6,25 @@
 
 #include "errors.hpp"
 
-#define DELOOP_LOG(fmt, level, ...)                                            \
+#define DELOOP_LOG(fmt, level, blocking, ...)                                  \
   do {                                                                         \
     std::array<deloop::LogArg, 4> args = deloop::CreateLogArgs(__VA_ARGS__);   \
-    deloop::SubmitLog(level, FNV1A_64(fmt), args);                             \
+    deloop::SubmitLog(level, FNV1A_64(fmt), args, blocking);                   \
   } while (0)
 
 #define DELOOP_LOG_INFO(fmt, ...)                                              \
-  DELOOP_LOG(fmt, deloop::LogLevel::INFO, ##__VA_ARGS__)
+  DELOOP_LOG(fmt, deloop::LogLevel::INFO, true, ##__VA_ARGS__)
 #define DELOOP_LOG_WARNING(fmt, ...)                                           \
-  DELOOP_LOG(fmt, deloop::LogLevel::WARNING, ##__VA_ARGS__)
+  DELOOP_LOG(fmt, deloop::LogLevel::WARNING, true, ##__VA_ARGS__)
 #define DELOOP_LOG_ERROR(fmt, ...)                                             \
-  DELOOP_LOG(fmt, deloop::LogLevel::ERROR, ##__VA_ARGS__)
+  DELOOP_LOG(fmt, deloop::LogLevel::ERROR, true, ##__VA_ARGS__)
+
+#define DELOOP_LOG_INFO_FROM_ISR(fmt, ...)                                     \
+  DELOOP_LOG(fmt, deloop::LogLevel::INFO, false, ##__VA_ARGS__)
+#define DELOOP_LOG_WARNING_FROM_ISR(fmt, ...)                                  \
+  DELOOP_LOG(fmt, deloop::LogLevel::WARNING, false, ##__VA_ARGS__)
+#define DELOOP_LOG_ERROR_FROM_ISR(fmt, ...)                                    \
+  DELOOP_LOG(fmt, deloop::LogLevel::ERROR, false, ##__VA_ARGS__)
 
 constexpr uint64_t FNV1A_64(std::string_view str) {
   uint64_t hash = 0xcbf29ce484222325;
@@ -77,6 +84,6 @@ constexpr std::array<LogArg, 4> CreateLogArgs(Values... values) {
 }
 
 void SubmitLog(LogLevel level, const uint64_t hash,
-               const std::array<LogArg, 4> &args);
+               const std::array<LogArg, 4> &args, bool blocking = true);
 
 } // namespace deloop

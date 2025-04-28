@@ -70,22 +70,24 @@ add_STM32CubeF4_library(stm32f4xx_hal
 )
 
 # nanopb
+set(PROTO_SOURCES
+  ${CMAKE_SOURCE_DIR}/proto/log.proto
+  ${CMAKE_SOURCE_DIR}/proto/command.proto
+  ${CMAKE_SOURCE_DIR}/proto/stream.proto
+)
+
 set(NANOPB_SRC_ROOT_FOLDER ${CMAKE_SOURCE_DIR}/external/nanopb)
 set(NANOPB_GENERATOR_SOURCE_DIR ${NANOPB_SRC_ROOT_FOLDER}/generator)
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${NANOPB_SRC_ROOT_FOLDER}/extra)
 find_package(Nanopb REQUIRED)
-nanopb_generate_cpp(TARGET proto
-  ${CMAKE_SOURCE_DIR}/proto/log.proto
-  ${CMAKE_SOURCE_DIR}/proto/stream.proto
-)
+nanopb_generate_cpp(TARGET proto ${PROTO_SOURCES})
 
 file(MAKE_DIRECTORY ${CMAKE_SOURCE_DIR}/python/deloop_mk0)
 add_custom_command(TARGET proto
 POST_BUILD
 COMMAND
-  protoc -I=${CMAKE_SOURCE_DIR}/proto --python_out=${CMAKE_SOURCE_DIR}/python/deloop_mk0
-  ${CMAKE_SOURCE_DIR}/proto/log.proto
-  ${CMAKE_SOURCE_DIR}/proto/stream.proto
+  protoc -I=${CMAKE_SOURCE_DIR}/proto --python_out=${CMAKE_SOURCE_DIR}/python/
+  ${PROTO_SOURCES}
 )
 
 # Application
@@ -135,13 +137,22 @@ POST_BUILD
   COMMAND ${CMAKE_OBJDUMP} -d ${EXECUTABLE} > ${PROJECT_NAME}.lst
 )
 
+set(LOGGING_MACROS
+  DELOOP_LOG_INFO
+  DELOOP_LOG_WARNING
+  DELOOP_LOG_ERROR
+  DELOOP_LOG_INFO_FROM_ISR
+  DELOOP_LOG_WARNING_FROM_ISR
+  DELOOP_LOG_ERROR_FROM_ISR
+)
+
 add_custom_command(TARGET ${EXECUTABLE}
 POST_BUILD
 COMMAND
   ${CMAKE_SOURCE_DIR}/scripts/create_log_table.py
   --output ${CMAKE_SOURCE_DIR}/python/deloop_mk0/log_table.json
   # NOTE: This must match the logging macros described in `src/logging.hpp`.
-  --macro DELOOP_LOG_INFO DELOOP_LOG_WARNING DELOOP_LOG_ERROR
+  --macro ${LOGGING_MACROS}
   --source_files ${SOURCES}
   --source_version ${PROJECT_VERSION}
 WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
