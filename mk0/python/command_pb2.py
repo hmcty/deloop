@@ -25,15 +25,15 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\rcommand.proto\"\xb8\x01\n\x07\x43ommand\x12\x0e\n\x06\x63md_id\x18\x01 \x01(\r\x12\x1e\n\x05reset\x18\x02 \x01(\x0b\x32\r.ResetCommandH\x00\x12\x39\n\x13\x63onfigure_recording\x18\x03 \x01(\x0b\x32\x1a.ConfigureRecordingCommandH\x00\x12\x37\n\x12\x63onfigure_playback\x18\x04 \x01(\x0b\x32\x19.ConfigurePlaybackCommandH\x00\x42\t\n\x07request\"A\n\x0f\x43ommandResponse\x12\x0e\n\x06\x63md_id\x18\x01 \x01(\r\x12\x1e\n\x06status\x18\x02 \x01(\x0e\x32\x0e.CommandStatus\"\x0e\n\x0cResetCommand\"+\n\x19\x43onfigureRecordingCommand\x12\x0e\n\x06\x65nable\x18\x01 \x01(\x08\"*\n\x18\x43onfigurePlaybackCommand\x12\x0e\n\x06\x65nable\x18\x01 \x01(\x08*f\n\rCommandStatus\x12\x0b\n\x07SUCCESS\x10\x00\x12\x1b\n\x17\x45RR_UNSUPPORTED_COMMAND\x10\x01\x12\x19\n\x15\x45RR_INVALID_PARAMETER\x10\x02\x12\x10\n\x0c\x45RR_INTERNAL\x10\x03\x62\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\rcommand.proto\"\xb8\x01\n\x07\x43ommand\x12\x0e\n\x06\x63md_id\x18\x01 \x01(\r\x12\x1e\n\x05reset\x18\x02 \x01(\x0b\x32\r.ResetCommandH\x00\x12\x39\n\x13\x63onfigure_recording\x18\x03 \x01(\x0b\x32\x1a.ConfigureRecordingCommandH\x00\x12\x37\n\x12\x63onfigure_playback\x18\x04 \x01(\x0b\x32\x19.ConfigurePlaybackCommandH\x00\x42\t\n\x07request\"A\n\x0f\x43ommandResponse\x12\x0e\n\x06\x63md_id\x18\x01 \x01(\r\x12\x1e\n\x06status\x18\x02 \x01(\x0e\x32\x0e.CommandStatus\"\x0e\n\x0cResetCommand\";\n\x19\x43onfigureRecordingCommand\x12\x13\n\x06\x65nable\x18\x01 \x01(\x08H\x00\x88\x01\x01\x42\t\n\x07_enable\"Z\n\x18\x43onfigurePlaybackCommand\x12\x13\n\x06\x65nable\x18\x01 \x01(\x08H\x00\x88\x01\x01\x12\x13\n\x06volume\x18\x02 \x01(\x02H\x01\x88\x01\x01\x42\t\n\x07_enableB\t\n\x07_volume*f\n\rCommandStatus\x12\x0b\n\x07SUCCESS\x10\x00\x12\x1b\n\x17\x45RR_UNSUPPORTED_COMMAND\x10\x01\x12\x19\n\x15\x45RR_INVALID_PARAMETER\x10\x02\x12\x10\n\x0c\x45RR_INTERNAL\x10\x03\x62\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'command_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   DESCRIPTOR._loaded_options = None
-  _globals['_COMMANDSTATUS']._serialized_start=376
-  _globals['_COMMANDSTATUS']._serialized_end=478
+  _globals['_COMMANDSTATUS']._serialized_start=440
+  _globals['_COMMANDSTATUS']._serialized_end=542
   _globals['_COMMAND']._serialized_start=18
   _globals['_COMMAND']._serialized_end=202
   _globals['_COMMANDRESPONSE']._serialized_start=204
@@ -41,7 +41,7 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_RESETCOMMAND']._serialized_start=271
   _globals['_RESETCOMMAND']._serialized_end=285
   _globals['_CONFIGURERECORDINGCOMMAND']._serialized_start=287
-  _globals['_CONFIGURERECORDINGCOMMAND']._serialized_end=330
-  _globals['_CONFIGUREPLAYBACKCOMMAND']._serialized_start=332
-  _globals['_CONFIGUREPLAYBACKCOMMAND']._serialized_end=374
+  _globals['_CONFIGURERECORDINGCOMMAND']._serialized_end=346
+  _globals['_CONFIGUREPLAYBACKCOMMAND']._serialized_start=348
+  _globals['_CONFIGUREPLAYBACKCOMMAND']._serialized_end=438
 # @@protoc_insertion_point(module_scope)

@@ -149,7 +149,7 @@
 #define WM8960_REG_FLAG_LEFT_SPKR_VOL_SPKLVOL_MAX_dB (int)(6)
 #define WM8960_REG_FLAG_RIGHT_SPKR_VOL_SPKLVOL_MUTE (uint16_t)(0b0000000)
 #define WM8960_REG_FLAG_LEFT_SPKR_VOL_SPKLVOL(X) \
-  (uint16_t)(std::max((0b1111111 - (6 - (X))) & 0x7F, 0b0110000))
+  (uint16_t)(std::max((0b0110000 + ((uint16_t)((X) - (-73)))) & 0x7F, 0b0110000))
 
 // --------------------------
 // Right Speaker Volume Flags
@@ -167,7 +167,7 @@
 #define WM8960_REG_FLAG_RIGHT_SPKR_VOL_SPKRVOL_MAX_dB (int)(6)
 #define WM8960_REG_FLAG_RIGHT_SPKR_VOL_SPKRVOL_MUTE (uint16_t)(0b0000000)
 #define WM8960_REG_FLAG_RIGHT_SPKR_VOL_SPKRVOL(X) \
-  (uint16_t)(std::max((0b1111111 - (6 - (X))) & 0x7F, 0b0110000))
+  (uint16_t)(std::max((0b0110000 + ((uint16_t)((X) - (-73)))) & 0x7F, 0b0110000))
 
 // --------------------
 // Power Mgmt (3) Flags

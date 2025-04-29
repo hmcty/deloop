@@ -114,5 +114,9 @@
   "5956356197285722054": {
     "msg": "Successfully started playback",
     "latest_version": "0.2.0"
+  },
+  "12379904509609995195": {
+    "msg": "Volume set to %d%%",
+    "latest_version": "0.2.0"
   }
 }

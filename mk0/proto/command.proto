@@ -24,9 +24,10 @@ message CommandResponse {
 message ResetCommand {}
 
 message ConfigureRecordingCommand {
-  bool enable = 1;
+  optional bool enable = 1;
 }
 
 message ConfigurePlaybackCommand {
-  bool enable = 1;
+  optional bool enable = 1;
+  optional float volume = 2;  // Optional volume level between 0.0 and 1.0
 }

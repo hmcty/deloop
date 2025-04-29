@@ -104,6 +104,21 @@ class Mk0Cmd(cmd2.Cmd):
 
         self._stream.configure_playback(enable=False)
 
+    def do_set_volume(self, arg) -> None:
+        """
+        Set the audio volume (0.0 to 1.0).
+
+        Usage: set_volume 0.5  # Set to 50%
+        """
+        try:
+            volume = float(arg)
+            volume = max(0.0, min(1.0, volume))
+            self._stream.set_volume(volume)
+            print(f"Volume set to {int(volume * 100)}%")
+
+        except ValueError:
+            print("Error: Volume must be a number between 0.0 and 1.0")
+
     def do_reset(self, _) -> None:
         """Reset the device (performs a soft reset)."""
 

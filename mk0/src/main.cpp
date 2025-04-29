@@ -165,6 +165,7 @@ static void ErrorHandler(void) {
 }
 
 static void CommandHandler(const Command &cmd) {
+  // TODO: Breakout larger requests into separate functions.
   switch (cmd.which_request) {
     case Command_reset_tag:
       // Call soft reset function
@@ -215,25 +216,19 @@ static void CommandHandler(const Command &cmd) {
       }
       break;
     case Command_configure_playback_tag:
-      if (cmd.request.configure_playback.enable != playback) {
-        auto error = deloop::WM8960::StopPlayback();
-        if (error != deloop::Error::kOk) {
-          DELOOP_LOG_ERROR_FROM_ISR("Failed to stop playback: %d", error);
-          deloop::UartStream::SendCommandResponse(
-              CommandResponse{
-                .cmd_id = cmd.cmd_id,
-                .status = CommandStatus_ERR_INTERNAL,
-              },
-              /*blocking=*/false
-          );
-          break;
-        }
+      {
+        ConfigurePlaybackCommand config_request = cmd.request.configure_playback;
 
-        playback = cmd.request.configure_playback.enable;
-        if (playback) {
-          error = deloop::WM8960::StartPlayback((uint8_t *) audio_buf, kAudioBufSize);
+        // Handle volume change if provided
+        if (config_request.has_volume) {
+          float volume = config_request.volume;
+          // Clamp volume between 0.0 and 1.0
+          if (volume < 0.0f) volume = 0.0f;
+          if (volume > 1.0f) volume = 1.0f;
+
+          auto error = deloop::WM8960::SetVolume(volume);
           if (error != deloop::Error::kOk) {
-            DELOOP_LOG_ERROR_FROM_ISR("Failed to start playback: %d", error);
+            DELOOP_LOG_ERROR_FROM_ISR("Failed to set volume: %d", error);
             deloop::UartStream::SendCommandResponse(
                 CommandResponse{
                   .cmd_id = cmd.cmd_id,
@@ -241,11 +236,45 @@ static void CommandHandler(const Command &cmd) {
                 },
                 /*blocking=*/false
             );
-            playback = false;
             break;
           }
 
-          DELOOP_LOG_INFO_FROM_ISR("Successfully started playback");
+          DELOOP_LOG_INFO_FROM_ISR("Volume set to %d%%", (int)(volume * 100));
+        }
+
+        // Handle playback state change if needed
+        if (config_request.has_enable && config_request.enable != playback) {
+          auto error = deloop::WM8960::StopPlayback();
+          if (error != deloop::Error::kOk) {
+            DELOOP_LOG_ERROR_FROM_ISR("Failed to stop playback: %d", error);
+            deloop::UartStream::SendCommandResponse(
+                CommandResponse{
+                  .cmd_id = cmd.cmd_id,
+                  .status = CommandStatus_ERR_INTERNAL,
+                },
+                /*blocking=*/false
+            );
+            break;
+          }
+
+          playback = config_request.enable;
+          if (playback) {
+            error = deloop::WM8960::StartPlayback((uint8_t *) audio_buf, kAudioBufSize);
+            if (error != deloop::Error::kOk) {
+              DELOOP_LOG_ERROR_FROM_ISR("Failed to start playback: %d", error);
+              deloop::UartStream::SendCommandResponse(
+                  CommandResponse{
+                    .cmd_id = cmd.cmd_id,
+                    .status = CommandStatus_ERR_INTERNAL,
+                  },
+                  /*blocking=*/false
+              );
+              playback = false;
+              break;
+            }
+
+            DELOOP_LOG_INFO_FROM_ISR("Successfully started playback");
+          }
         }
 
         deloop::UartStream::SendCommandResponse(
@@ -268,10 +297,10 @@ static void CoreLoopTask(void *pvParameters) {
 
   DELOOP_LOG_INFO("Starting core loop...");
 
-  auto error = deloop::WM8960::SetVolume(0.60f);
-  if (error != deloop::Error::kOk) {
-    DELOOP_LOG_ERROR("Failed to set volume: %d", error);
-  }
+//auto error = deloop::WM8960::SetVolume(0.40f);
+//if (error != deloop::Error::kOk) {
+//  DELOOP_LOG_ERROR("Failed to set volume: %d", error);
+//}
 
 //error = deloop::WM8960::StartPlayback((uint8_t *) audio_buf, kAudioBufSize);
 //if (error != deloop::Error::kOk) {

@@ -203,8 +203,13 @@ class Mk0Stream(Protocol):
 
         return cmd
 
-    def configure_recording(self, enable: bool) -> None:
-        """Configure audio recording on the device."""
+    def configure_recording(self, enable: bool | None = None) -> None:
+        """Configure audio recording on the device.
+
+        Args:
+            enable: Enable or disable recording (optional)
+
+        """
 
         def cmd_cb(resp):
             if resp.status == command_pb2.CommandStatus.SUCCESS:
@@ -213,12 +218,24 @@ class Mk0Stream(Protocol):
                 logger.error(f"Failed to configure recording: {resp.status}")
 
         cmd = self._create_command(cmd_cb)
-        cmd.configure_recording.enable = enable
+
+        if enable is not None:
+            cmd.configure_recording.enable = enable
 
         self._send_command(cmd)
 
-    def configure_playback(self, enable: bool) -> None:
-        """Configure audio playback on the device."""
+    def configure_playback(
+        self,
+        enable: bool | None = None,
+        volume: float | None = None,
+    ) -> None:
+        """
+        Configure audio playback on the device.
+
+        Args:
+            enable: Enable or disable playback (optional)
+            volume: Volume level between 0.0 and 1.0 (optional)
+        """
 
         def cmd_cb(resp):
             if resp.status == command_pb2.CommandStatus.SUCCESS:
@@ -227,9 +244,24 @@ class Mk0Stream(Protocol):
                 logger.error(f"Failed to configure playback: {resp.status}")
 
         cmd = self._create_command(cmd_cb)
-        cmd.configure_playback.enable = enable
+
+        if enable is not None:
+            cmd.configure_playback.enable = enable
+
+        if volume is not None:
+            cmd.configure_playback.volume = max(0.0, min(1.0, volume))
 
         self._send_command(cmd)
+
+    def set_volume(self, volume: float) -> None:
+        """
+        Set the audio volume.
+
+        Args:
+            volume: Volume level between 0.0 and 1.0
+        """
+        # We use configure_playback with just the volume parameter
+        self.configure_playback(volume=volume)
 
     def reset_device(self) -> None:
         """Send a reset command to the device."""

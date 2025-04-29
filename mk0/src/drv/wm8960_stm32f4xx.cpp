@@ -158,7 +158,7 @@ deloop::Error deloop::WM8960::ResetToDefaults(void) {
 
   DELOOP_RETURN_IF_ERROR(deloop::WM8960::WriteRegister(
     WM8960_REG_ADDR_CLASS_D_CTL_1,
-    WM8960_REG_FLAG_CLASS_D_CTL_1_SPK_OP_EN_BOTH));
+    WM8960_REG_FLAG_CLASS_D_CTL_1_SPK_OP_EN_LEFT_ONLY));
 
   __HAL_SAI_ENABLE(&_state.sai_tx_handle);
   __HAL_SAI_ENABLE(&_state.sai_rx_handle);
@@ -183,8 +183,8 @@ deloop::Error deloop::WM8960::WriteRegister(uint8_t reg_addr, uint16_t data) {
     if (status == HAL_OK) {
       break;
     } else if (retry_attempts == 0) {
-      DELOOP_LOG_ERROR(
-        "[WM8960] Failed to write to register 0x%02X: 0x%02X", reg_addr, data);
+    //DELOOP_LOG_ERROR(
+    //  "[WM8960] Failed to write to register 0x%02X: 0x%02X", reg_addr, data);
       break;
     }
   }
@@ -255,6 +255,7 @@ deloop::Error deloop::WM8960::SetVolume(float volume) {
   volume_dB = std::max(kMinVolume_dB, std::min(kMaxVolume_dB, volume_dB));
 
   uint16_t volume_flag = WM8960_REG_FLAG_RIGHT_SPKR_VOL_SPKRVOL(volume_dB);
+  // uint16_t volume_flag = 0b01110100;
   DELOOP_RETURN_IF_ERROR(WriteRegister(
     WM8960_REG_ADDR_LEFT_SPKR_VOL,
     volume_flag));
@@ -264,6 +265,6 @@ deloop::Error deloop::WM8960::SetVolume(float volume) {
     WM8960_REG_FLAG_RIGHT_SPKR_VOL_SPKVU |  // Required to take effect.
     volume_flag));
 
-  DELOOP_LOG_INFO("[WM8960] Volume set to 0x%04X (%d dB)", volume_flag, volume_dB);
+  // DELOOP_LOG_INFO("[WM8960] Volume set to 0x%04X (%d dB)", volume_flag, volume_dB);
   return deloop::Error::kOk;
 }
