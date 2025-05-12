@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.15)
 project(deloop_mk0
-  VERSION 0.2.0
+  VERSION 0.3.0
   DESCRIPTION "Deloop Mk0"
 )
 
@@ -9,14 +9,36 @@ enable_language(C CXX ASM)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+# MCU OPTIONS
+set(MCU_TARGET "CORTEX_M4" CACHE STRING "Target platform for compilation")
+set_property(CACHE MCU_TARGET PROPERTY STRINGS
+  CORTEX_M4
+  HOST  # For unit tests
+)
+
+if (MCU_TARGET STREQUAL "CORTEX_M4")
+  set(MCU_OPTIONS
+    -mcpu=cortex-m4
+    -mthumb
+    -mfloat-abi=hard
+    -mfpu=fpv4-sp-d16
+  )
+  set(MCU_LINKER_OPTIONS
+    -specs=nano.specs
+    -T${CMAKE_SOURCE_DIR}/src/linker/STM32F446RE_FLASH.ld
+  )
+  set(FREERTOS_PORT GCC_ARM_CM4F)
+elseif (MCU_TARGET STREQUAL "HOST")
+  set(MCU_OPTIONS "")
+  set(MCU_LINKER_OPTIONS "")
+  set(FREERTOS_PORT GCC_POSIX)
+else()
+  message(FATAL_ERROR "Unsupported MCU target: ${MCU_TARGET}")
+endif()
 
 # COMPILER OPTIONS
-set(MCU_OPTIONS
-  -mcpu=cortex-m4
-  -mthumb
-  -mfloat-abi=hard
-  -mfpu=fpv4-sp-d16
-)
 set(EXTRA_OPTIONS
   -fdata-sections
   -ffunction-sections
@@ -46,8 +68,7 @@ add_compile_options(
 # LINKER OPTIONS
 add_link_options(
   ${MCU_OPTIONS}
-  -specs=nano.specs
-  -T${CMAKE_SOURCE_DIR}/src/linker/STM32F446RE_FLASH.ld
+  ${MCU_LINKER_OPTIONS}
   -Wl,-Map=${PROJECT_NAME}.map,--cref
   -Wl,--gc-sections
   -Wl,--print-memory-usage
@@ -55,9 +76,7 @@ add_link_options(
 )
 
 # FreeRTOS
-set(FREERTOS_PORT GCC_ARM_CM4F)
 set(FREERTOS_KERNEL_PATH ${CMAKE_SOURCE_DIR}/external/FreeRTOS/FreeRTOS/Source)
-
 add_library(freertos_config INTERFACE)
 target_include_directories(freertos_config INTERFACE ${CMAKE_SOURCE_DIR}/src/config)
 add_subdirectory(${FREERTOS_KERNEL_PATH} ${CMAKE_BINARY_DIR}/FreeRTOS-Kernel)
@@ -82,37 +101,57 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${NANOPB_SRC_ROOT_FOLDER}/extra)
 find_package(Nanopb REQUIRED)
 nanopb_generate_cpp(TARGET proto ${PROTO_SOURCES})
 
-file(MAKE_DIRECTORY ${CMAKE_SOURCE_DIR}/python/deloop_mk0)
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/python/deloop_mk0)
 add_custom_command(TARGET proto
 POST_BUILD
 COMMAND
-  protoc -I=${CMAKE_SOURCE_DIR}/proto --python_out=${CMAKE_SOURCE_DIR}/python/
+  protoc -I=${CMAKE_SOURCE_DIR}/proto
+  --python_out=${CMAKE_BINARY_DIR}/python/
   ${PROTO_SOURCES}
 )
 
-# Application
+# DRIVERS
+add_library(wm8960_stm32f4 STATIC
+  src/drv/wm8960_stm32f4.cpp
+)
+target_include_directories(wm8960_stm32f4
+PUBLIC
+  ${CMAKE_SOURCE_DIR}/src
+)
+target_link_libraries(wm8960_stm32f4
+PRIVATE
+  stm32f4xx_hal_interface
+)
+
+if (NOT ENABLE_TESTING AND MCU_TARGET STREQUAL "CORTEX_M4")
+  target_link_libraries(wm8960_stm32f4
+  PRIVATE
+    stm32f4xx_hal
+  )
+endif()
+
+# APPLICATION
 set(EXECUTABLE ${PROJECT_NAME}.elf)
 set(SOURCES
   src/main.cpp
   src/rtos_hooks.cpp
   src/uart_stream.cpp
-  src/drv/wm8960_stm32f4xx.cpp
-  # src/tasks/play_sine_wave.cpp
   src/startup/startup_stm32f446xx.s
   src/board/stm32f4xx_it.h
   src/board/stm32f4xx_it.c
   src/board/stm32f4xx_hal_msp.c
   src/board/system_stm32f4xx.c
 )
+
 add_executable(${EXECUTABLE} ${SOURCES})
 target_include_directories(${EXECUTABLE}
-PRIVATE
+PUBLIC
   ${CMAKE_CURRENT_LIST_DIR}
   ${CMAKE_SOURCE_DIR}/src
   ${CMAKE_SOURCE_DIR}/src/config
 )
 target_compile_options(${EXECUTABLE}
-PRIVATE
+PUBLIC
   -Wall
   -Wextra
   -Wshadow
@@ -120,11 +159,12 @@ PRIVATE
   -Wdouble-promotion
 )
 target_link_libraries(${EXECUTABLE}
-PRIVATE
+PUBLIC
   proto
   nanopb
   freertos_kernel
   freertos_config
+  wm8960_stm32f4
   stm32f4xx_hal
 )
 
@@ -150,10 +190,21 @@ add_custom_command(TARGET ${EXECUTABLE}
 POST_BUILD
 COMMAND
   ${CMAKE_SOURCE_DIR}/scripts/create_log_table.py
-  --output ${CMAKE_SOURCE_DIR}/python/deloop_mk0/log_table.json
+  --latest ${CMAKE_SOURCE_DIR}/python/deloop_mk0/log_table.json
+  --output ${CMAKE_BINARY_DIR}/python/log_table.json
   # NOTE: This must match the logging macros described in `src/logging.hpp`.
   --macro ${LOGGING_MACROS}
   --source_files ${SOURCES}
   --source_version ${PROJECT_VERSION}
 WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
 )
+
+# TESTING
+if(ENABLE_TESTING)
+  set(BUILD_GMOCK OFF)
+  add_subdirectory(${CMAKE_SOURCE_DIR}/external/googletest)
+  add_subdirectory(${CMAKE_SOURCE_DIR}/external/fff)
+
+  enable_testing()
+  add_subdirectory(${CMAKE_SOURCE_DIR}/tests)
+endif()

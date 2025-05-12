@@ -37,4 +37,7 @@ docs/hotdoc-private*
 Cargo.lock
 target/
 .result/
-result
+result*
+
+compile_commands.json
+.cache/

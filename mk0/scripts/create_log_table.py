@@ -49,9 +49,9 @@ def main(args: argparse.Namespace) -> None:
     )
 
     log_table = {}
-    if os.path.isfile(args.output) and os.path.getsize(args.output) > 0:
-        with open(args.output, "r") as output_file:
-            log_table = json.load(output_file)
+    if args.latest:
+        with open(args.latest, "r") as latest_file:
+            log_table.update(json.load(latest_file))
 
     for source_file in args.source_files:
         if not os.path.isfile(source_file):
@@ -91,7 +91,13 @@ if __name__ == "__main__":
         "--output",
         type=str,
         required=True,
-        help="Path to the output JSON file.",
+        help="Path to write log table (JSON format).",
+    )
+    arg_parser.add_argument(
+        "--latest",
+        type=str,
+        default=None,
+        help="Path to a previous log table (for backwards compatibility).",
     )
     arg_parser.add_argument(
         "--macro",

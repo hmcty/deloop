@@ -2,15 +2,14 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Build Commands
-- Build firmware: `nix-build` (produces `result/bin/deloop_mk0.elf`)
-- Build with nix-shell: `nix-shell && mkdir build && cd build && cmake -DCMAKE_TOOLCHAIN_FILE:PATH="cmake/arm-none-eabi-gcc.cmake" -DCMAKE_BUILD_TYPE=Debug .. && make`
-- Flash firmware: `./scripts/flash.sh`
-- Debug: `./scripts/debug.sh`
-- Run REPL: `./result/bin/deloop_mk0_repl`
-- Run tests: `python -m unittest tests/test_log_table.py`
+## Commands
+
+- Build firmware: `nix-build -A firmware`
+- Build SDK: `nix-build -A sdk`
+- Run all tests: `nix-build -A tests`
 
 ## Code Style
+
 - C++23 standard
 - Use namespaces for project code (`deloop::`)
 - Follow existing error handling with `DELOOP_RETURN_IF_ERROR` macro

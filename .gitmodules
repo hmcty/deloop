@@ -7,3 +7,12 @@
 [submodule "mk0/external/nanopb"]
 	path = mk0/external/nanopb
 	url = git@github.com:nanopb/nanopb.git
+[submodule "mk0/external/Unity"]
+	path = mk0/external/Unity
+	url = git@github.com:ThrowTheSwitch/Unity.git
+[submodule "mk0/external/fff"]
+	path = mk0/external/fff
+	url = git@github.com:meekrosoft/fff.git
+[submodule "mk0/external/googletest"]
+	path = mk0/external/googletest
+	url = git@github.com:google/googletest.git

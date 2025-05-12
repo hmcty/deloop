@@ -1,65 +1,102 @@
 { pkgs ? import (fetchTarball "https://github.com/NixOS/nixpkgs/archive/8b27c1239e5c421a2bbc2c65d52e4a6fbf2ff296.tar.gz") {} }:
 
 let
+  version = "0.1.0";
   fs = pkgs.lib.fileset;
-  mk0-dev = pkgs.stdenv.mkDerivation rec {
-    pname = "deloop-mk0-dev";
-    version = "0.1.0";
-    src = fs.toSource {
-      root = ./.;
-      fileset = fs.unions [
-        ./CMakeLists.txt
-        ./scripts/create_log_table.py
-        ./cmake
-        ./external
-        ./proto
-        (fs.fileFilter
-          (file: file.hasExt "c"
-                 || file.hasExt "cpp"
-                 || file.hasExt "h"
-                 || file.hasExt "hpp"
-                 || file.hasExt "ld"
-                 || file.hasExt "s")
-          ./src)
-      ];
+  app_fileset = fs.unions [
+    ./CMakeLists.txt
+    ./scripts/create_log_table.py
+    ./cmake
+    ./external
+    ./proto
+    ./python/deloop_mk0/log_table.json
+    (fs.fileFilter
+      (file: file.hasExt "c"
+              || file.hasExt "cpp"
+              || file.hasExt "h"
+              || file.hasExt "hpp"
+              || file.hasExt "ld"
+              || file.hasExt "s")
+      ./src)
+  ];
+
+  mkDeloopDerivation = {
+    name,
+    fileset,
+    mVersion ? version,
+    mBuildPhase ? null,
+    mCheckPhase ? null,
+    mInstallPhase ? null,
+    cmakeExtraFlags ? [],
+    extraBuildInputs ? [],
+  } :
+    pkgs.stdenv.mkDerivation rec {
+      pname = name;
+      version = mVersion;
+      src = fs.toSource {
+        root = ./.;
+        fileset = fileset;
+      };
+
+      buildInputs = [
+        pkgs.cmake
+        pkgs.protobuf_25
+        pkgs.python3
+        pkgs.python3Packages.protobuf
+        pkgs.python3Packages.grpcio-tools
+      ] ++ extraBuildInputs;
+
+      cmakeFlags = [
+        "-DPROTOBUF_PROTOC_EXECUTABLE:FILEPATH=${pkgs.protobuf_25}/bin/protoc"
+      ] ++ cmakeExtraFlags;
+
+      postPatch = ''
+        chmod +x external/nanopb/generator/protoc-gen-nanopb
+        patchShebangs external/nanopb/generator/protoc-gen-nanopb
+
+        chmod +x scripts/create_log_table.py
+        patchShebangs scripts/create_log_table.py
+      '';
+
+      buildPhase = if mBuildPhase != null then mBuildPhase else "make";
+      doCheck = mCheckPhase != null;
+      checkPhase = if mCheckPhase != null then mCheckPhase else "";
+      installPhase = if mInstallPhase != null then mInstallPhase else "";
     };
 
-    buildInputs = [
-      pkgs.cmake
-      pkgs.gcc-arm-embedded-13
-      pkgs.protobuf_25
-      pkgs.python3
-      pkgs.python3Packages.protobuf
-      pkgs.python3Packages.grpcio-tools
-    ];
-
-    postPatch = ''
-      chmod +x external/nanopb/generator/protoc-gen-nanopb
-      patchShebangs external/nanopb/generator/protoc-gen-nanopb
-
-      chmod +x scripts/create_log_table.py
-      patchShebangs scripts/create_log_table.py
-    '';
-
-    cmakeFlags = [
+  firmware = mkDeloopDerivation {
+    name = "deloop-mk0-firmware";
+    fileset = app_fileset;
+    cmakeExtraFlags = [
       "-DCMAKE_TOOLCHAIN_FILE:PATH=cmake/arm-none-eabi-gcc.cmake"
-      "-DCMAKE_BUILD_TYPE=Debug"
-      "-DPROTOBUF_PROTOC_EXECUTABLE:FILEPATH=${pkgs.protobuf_25}/bin/protoc"
     ];
-
-    buildPhase = ''
-      make
-    '';
-
-    installPhase = ''
-      mkdir -p $out/bin $out/python/deloop_mk0
+    extraBuildInputs = [pkgs.gcc-arm-embedded-13];
+    mInstallPhase = ''
+      mkdir -p $out/bin $out/python
       cp *.hex *.elf *.bin *.map *.lst *.size $out/bin
-      cp ../python/**/*_pb2.py ../python/**/*.json $out/python
+      cp python/*_pb2.py python/log_table.json $out/python
     '';
   };
 
-  mk0-app = pkgs.python3Packages.buildPythonApplication {
-    pname = "deloop-mk0-app";
+  tests = mkDeloopDerivation {
+    name = "deloop-mk0-tests";
+    fileset = fs.unions [ app_fileset ./tests ];
+    cmakeExtraFlags = [
+      "-DENABLE_TESTING=ON"
+      "-DMCU_TARGET=HOST"
+    ];
+    mBuildPhase = ''
+      make test_wm8960
+    '';
+    mCheckPhase = "ctest --output-on-failure";
+    mInstallPhase = ''
+      mkdir -p $out/bin
+      cp tests/test_wm8960 $out/bin
+    '';
+  };
+
+  sdk = pkgs.python3Packages.buildPythonApplication {
+    pname = "deloop-mk0-sdk";
     version = "0.1.0";
     src = fs.toSource {
       root = ./python;
@@ -68,7 +105,7 @@ let
       ];
     };
 
-    buildInputs = [ mk0-dev ];
+    buildInputs = [ firmware ];
 
     build-system = with pkgs.python3Packages; [
       setuptools
@@ -83,21 +120,27 @@ let
     ];
 
     postPatch = ''
-      cp -r ${mk0-dev}/python/*_pb2.py ./
-      cp -r ${mk0-dev}/python/*.json ./deloop_mk0
+      cp -r ${firmware}/python/*_pb2.py ./
+      cp -r ${firmware}/python/log_table.json ./deloop_mk0
     '';
 
     doCheck = false;
   };
-in
-pkgs.stdenv.mkDerivation rec {
-  pname = "deloop-mk0";
-  version = "0.1.0";
 
-  phases = [ "installPhase" ];
-  installPhase = ''
-    mkdir -p $out/bin
-    cp -r ${mk0-dev}/bin/* $out/bin
-    cp -r ${mk0-app}/* $out
-  '';
+in
+{
+  default = pkgs.stdenv.mkDerivation rec {
+    pname = "deloop-mk0";
+    version = "0.1.0";
+
+    phases = [ "installPhase" ];
+    installPhase = ''
+      mkdir -p $out/bin
+      cp -r ${firmware}/bin/* $out/bin
+      cp -r ${sdk}/* $out
+    '';
+  };
+  firmware = firmware;
+  tests = tests;
+  sdk = sdk;
 }

@@ -54,10 +54,6 @@ constexpr LogArg ToLogArg(uint32_t value) {
   return LogArg{LogArg::Type::kU32, {.u32 = value}};
 }
 
-constexpr LogArg ToLogArg(int32_t value) {
-  return LogArg{LogArg::Type::kI32, {.i32 = value}};
-}
-
 constexpr LogArg ToLogArg(int value) {
   return LogArg{LogArg::Type::kI32, {.i32 = value}};
 }

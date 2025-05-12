@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest import mock
 from unittest.mock import mock_open, patch
 
-sys.path.append(str(Path(__file__).parent.parent / "scripts"))
+sys.path.append(str(Path(__file__).parent.parent.parent / "scripts"))
 import create_log_table  # noqa: E402
 
 
@@ -93,6 +93,7 @@ class TestCreateLogTable(unittest.TestCase):
             args.source_files = [tmp_path]
             args.source_version = "1.0.0"
             args.output = output_tmp.name
+            args.latest = None
 
             with patch("builtins.print") as mock_print:
                 create_log_table.main(args)

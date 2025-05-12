@@ -3,120 +3,48 @@
     "msg": "Failed to initialize WM8960: %d",
     "latest_version": "0.2.0"
   },
-  "16235888736721373036": {
-    "msg": "Starting core loop...",
-    "latest_version": "0.2.0"
-  },
-  "7467477190116343306": {
-    "msg": "Failed to set volume: %d",
-    "latest_version": "0.2.0"
-  },
-  "17703790939935358401": {
-    "msg": "Failed to start playback: %d",
+  "1113806391295843639": {
+    "msg": "Failed to stop recording: %d",
     "latest_version": "0.2.0"
   },
   "7397074153173428353": {
     "msg": "Failed to start recording: %d",
     "latest_version": "0.2.0"
   },
-  "13472643645345112721": {
-    "msg": "Data: %02x %02x %02x %02x",
-    "latest_version": "0.2.0"
-  },
-  "4981186662785333881": {
-    "msg": "Failed to exchange data: %d",
-    "latest_version": "0.2.0"
-  },
-  "8035607851684678163": {
-    "msg": "[WM8960] SAI Rx complete callback.",
-    "latest_version": "0.2.0"
-  },
-  "16928921907232488655": {
-    "msg": "[WM8960] Initializing...",
-    "latest_version": "0.2.0"
-  },
-  "8010726201827881308": {
-    "msg": "[WM8960] Failed to initialize I2C peripheral.",
-    "latest_version": "0.2.0"
-  },
-  "755622758604016128": {
-    "msg": "[WM8960] Failed to initialize SAI peripheral: %d",
-    "latest_version": "0.2.0"
-  },
-  "9206641012784212860": {
-    "msg": "[WM8960] Resetting to defaults..",
-    "latest_version": "0.2.0"
-  },
-  "15679225499730272149": {
-    "msg": "[WM8960] Failed to write to  register 0x%02X: 0x%02X",
-    "latest_version": "0.1.0"
-  },
-  "11396981336495991574": {
-    "msg": "[WM8960] Volume set to 0x%04X (%d dB)",
-    "latest_version": "0.2.0"
-  },
-  "5037338741041400909": {
-    "msg": "[WM8960] Failed to write to register 0x%02X: 0x%02X",
-    "latest_version": "0.2.0"
-  },
-  "1323059212765809756": {
-    "msg": "Received command: %d",
-    "latest_version": "0.2.0"
-  },
-  "1763759043371154615": {
-    "msg": "UART RX complete callback",
-    "latest_version": "0.2.0"
-  },
-  "15374549110968507170": {
-    "msg": "Start byte received",
-    "latest_version": "0.2.0"
-  },
-  "15676728218401913260": {
-    "msg": "Command length byte received: %d",
-    "latest_version": "0.2.0"
-  },
-  "9717027981675796312": {
-    "msg": "Failed to decode command",
-    "latest_version": "0.2.0"
-  },
-  "7937732262986153794": {
-    "msg": "Received command!",
-    "latest_version": "0.2.0"
-  },
-  "16498210682059729996": {
-    "msg": "Configure recording command received",
-    "latest_version": "0.2.0"
-  },
-  "4208920490184759556": {
-    "msg": "Configure playback command received",
-    "latest_version": "0.2.0"
-  },
-  "12028541261731044371": {
-    "msg": "Unknown command received",
-    "latest_version": "0.2.0"
-  },
-  "1113806391295843639": {
-    "msg": "Failed to stop recording: %d",
-    "latest_version": "0.2.0"
-  },
-  "9755926389740311194": {
-    "msg": "Failed to start recording",
-    "latest_version": "0.2.0"
-  },
   "3722893999432676030": {
     "msg": "Successfully started recording",
+    "latest_version": "0.2.0"
+  },
+  "7467477190116343306": {
+    "msg": "Failed to set volume: %d",
+    "latest_version": "0.2.0"
+  },
+  "12379904509609995195": {
+    "msg": "Volume set to %d%%",
     "latest_version": "0.2.0"
   },
   "16987161098783649399": {
     "msg": "Failed to stop playback: %d",
     "latest_version": "0.2.0"
   },
+  "17703790939935358401": {
+    "msg": "Failed to start playback: %d",
+    "latest_version": "0.2.0"
+  },
   "5956356197285722054": {
     "msg": "Successfully started playback",
     "latest_version": "0.2.0"
   },
-  "12379904509609995195": {
-    "msg": "Volume set to %d%%",
+  "12028541261731044371": {
+    "msg": "Unknown command received",
+    "latest_version": "0.2.0"
+  },
+  "16235888736721373036": {
+    "msg": "Starting core loop...",
+    "latest_version": "0.2.0"
+  },
+  "9717027981675796312": {
+    "msg": "Failed to decode command",
     "latest_version": "0.2.0"
   }
 }
