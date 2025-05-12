@@ -1,50 +1,50 @@
 {
   "966162262948479881": {
     "msg": "Failed to initialize WM8960: %d",
-    "latest_version": "0.2.0"
+    "latest_version": "0.3.0"
   },
   "1113806391295843639": {
     "msg": "Failed to stop recording: %d",
-    "latest_version": "0.2.0"
+    "latest_version": "0.3.0"
   },
   "7397074153173428353": {
     "msg": "Failed to start recording: %d",
-    "latest_version": "0.2.0"
+    "latest_version": "0.3.0"
   },
   "3722893999432676030": {
     "msg": "Successfully started recording",
-    "latest_version": "0.2.0"
+    "latest_version": "0.3.0"
   },
   "7467477190116343306": {
     "msg": "Failed to set volume: %d",
-    "latest_version": "0.2.0"
+    "latest_version": "0.3.0"
   },
   "12379904509609995195": {
     "msg": "Volume set to %d%%",
-    "latest_version": "0.2.0"
+    "latest_version": "0.3.0"
   },
   "16987161098783649399": {
     "msg": "Failed to stop playback: %d",
-    "latest_version": "0.2.0"
+    "latest_version": "0.3.0"
   },
   "17703790939935358401": {
     "msg": "Failed to start playback: %d",
-    "latest_version": "0.2.0"
+    "latest_version": "0.3.0"
   },
   "5956356197285722054": {
     "msg": "Successfully started playback",
-    "latest_version": "0.2.0"
+    "latest_version": "0.3.0"
   },
   "12028541261731044371": {
     "msg": "Unknown command received",
-    "latest_version": "0.2.0"
+    "latest_version": "0.3.0"
   },
   "16235888736721373036": {
     "msg": "Starting core loop...",
-    "latest_version": "0.2.0"
+    "latest_version": "0.3.0"
   },
   "9717027981675796312": {
     "msg": "Failed to decode command",
-    "latest_version": "0.2.0"
+    "latest_version": "0.3.0"
   }
 }

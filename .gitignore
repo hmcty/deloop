@@ -41,3 +41,4 @@ result*
 
 compile_commands.json
 .cache/
+*_pb2.py
