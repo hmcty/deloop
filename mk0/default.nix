@@ -3,7 +3,7 @@
 let
   version = "0.1.0";
   fs = pkgs.lib.fileset;
-  app_fileset = fs.unions [
+  firmware_fileset = fs.unions [
     ./CMakeLists.txt
     ./scripts/create_log_table.py
     ./cmake
@@ -66,7 +66,7 @@ let
 
   firmware = mkDeloopDerivation {
     name = "deloop-mk0-firmware";
-    fileset = app_fileset;
+    fileset = firmware_fileset;
     cmakeExtraFlags = [
       "-DCMAKE_TOOLCHAIN_FILE:PATH=cmake/arm-none-eabi-gcc.cmake"
     ];
@@ -80,18 +80,16 @@ let
 
   tests = mkDeloopDerivation {
     name = "deloop-mk0-tests";
-    fileset = fs.unions [ app_fileset ./tests ];
+    fileset = fs.unions [ firmware_fileset ./tests ];
     cmakeExtraFlags = [
       "-DENABLE_TESTING=ON"
       "-DMCU_TARGET=HOST"
     ];
-    mBuildPhase = ''
-      make test_wm8960
-    '';
     mCheckPhase = "ctest --output-on-failure";
+    mBuildPhase = "make all_tests";  # TODO: Fix `make all` on host.
     mInstallPhase = ''
       mkdir -p $out/bin
-      cp tests/test_wm8960 $out/bin
+      find tests -type f -executable -name "test_*" -exec cp {} $out/bin \;
     '';
   };
 
