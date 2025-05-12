@@ -81,6 +81,7 @@ def main(args: argparse.Namespace) -> None:
 
     with open(args.output, "w") as output_file:
         json.dump(log_table, output_file, indent=2)
+        output_file.write("\n")
 
     print(f"Wrote {len(log_table)} log calls to {args.output}")
 
