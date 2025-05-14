@@ -46,5 +46,69 @@
   "9717027981675796312": {
     "msg": "Failed to decode command",
     "latest_version": "0.3.0"
+  },
+  "8035607851684678163": {
+    "msg": "[WM8960] SAI Rx complete callback.",
+    "latest_version": "0.3.0"
+  },
+  "16928921907232488655": {
+    "msg": "[WM8960] Initializing...",
+    "latest_version": "0.3.0"
+  },
+  "8010726201827881308": {
+    "msg": "[WM8960] Failed to initialize I2C peripheral.",
+    "latest_version": "0.3.0"
+  },
+  "755622758604016128": {
+    "msg": "[WM8960] Failed to initialize SAI peripheral: %d",
+    "latest_version": "0.3.0"
+  },
+  "9206641012784212860": {
+    "msg": "[WM8960] Resetting to defaults..",
+    "latest_version": "0.3.0"
+  },
+  "11396981336495991574": {
+    "msg": "[WM8960] Volume set to 0x%04X (%d dB)",
+    "latest_version": "0.3.0"
+  },
+  "13493089180060341213": {
+    "msg": "[WM8960] Failed to reset to defaults: %d",
+    "latest_version": "0.3.0"
+  },
+  "17778967949008834679": {
+    "msg": "[WM8960] Failed to set ADC/DAC control: %d",
+    "latest_version": "0.3.0"
+  },
+  "9869784643080224934": {
+    "msg": "[WM8960] Failed to configure power mgmt 1: %d",
+    "latest_version": "0.3.0"
+  },
+  "4257921156694928919": {
+    "msg": "[WM8960] Failed to configure power mgmt 2: %d",
+    "latest_version": "0.3.0"
+  },
+  "14290296342619008516": {
+    "msg": "[WM8960] Failed to configure power mgmt 3: %d",
+    "latest_version": "0.3.0"
+  },
+  "4170188152727727896": {
+    "msg": "[WM8960] Failed to configure left out mix: %d",
+    "latest_version": "0.3.0"
+  },
+  "11268410368032308623": {
+    "msg": "[WM8960] Failed to configure right out mix: %d",
+    "latest_version": "0.3.0"
+  },
+  "4489164193748945985": {
+    "msg": "[WM8960] Failed to configure class D control 1: %d",
+    "latest_version": "0.3.0"
+  },
+  "5037338741041400909": {
+    "msg": "[WM8960] Failed to write to register 0x%02X: 0x%02X",
+    "latest_version": "0.3.0"
+  },
+  "3277987417236722513": {
+    "msg": "[WM8960] Failed to write to register 0x%02X:\n      // 0x%02X",
+    "latest_version": "0.3.0"
   }
 }

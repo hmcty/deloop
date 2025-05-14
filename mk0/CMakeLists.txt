@@ -41,9 +41,17 @@ endif()
 # COMPILER OPTIONS
 set(EXTRA_OPTIONS
   -fdata-sections
-  -ffunction-sections
   -fno-exceptions
+  -ffunction-sections
   -finput-charset=UTF-8
+)
+set(INTERNAL_OPTIONS  # Not applied to third-party libraries.
+  -fno-rtti
+  -Wall
+  -Wextra
+  -Wshadow
+  -Wconversion
+  -Wdouble-promotion
 )
 set(OPTIMIZATION_OPTIONS
   $<$<CONFIG:Debug>:-Og>
@@ -63,6 +71,7 @@ add_compile_options(
   ${OPTIMIZATION_OPTIONS}
   ${DEPENDENCY_INFO_OPTIONS}
   ${DEBUG_INFO_OPTIONS}
+  $<$<COMPILE_LANGUAGE:CXX>:${CXX_OPTIONS}>
 )
 
 # LINKER OPTIONS
@@ -114,6 +123,7 @@ COMMAND
 add_library(wm8960_stm32f4 STATIC
   src/drv/wm8960_stm32f4.cpp
 )
+target_compile_options(wm8960_stm32f4 PRIVATE ${INTERNAL_OPTIONS})
 target_include_directories(wm8960_stm32f4
 PUBLIC
   ${CMAKE_SOURCE_DIR}/src
@@ -129,7 +139,6 @@ if (NOT ENABLE_TESTING AND MCU_TARGET STREQUAL "CORTEX_M4")
     stm32f4xx_hal
   )
 endif()
-
 # APPLICATION
 set(EXECUTABLE ${PROJECT_NAME}.elf)
 set(SOURCES
@@ -150,14 +159,7 @@ PUBLIC
   ${CMAKE_SOURCE_DIR}/src
   ${CMAKE_SOURCE_DIR}/src/config
 )
-target_compile_options(${EXECUTABLE}
-PUBLIC
-  -Wall
-  -Wextra
-  -Wshadow
-  -Wconversion
-  -Wdouble-promotion
-)
+target_compile_options(wm8960_stm32f4 PRIVATE ${INTERNAL_OPTIONS})
 target_link_libraries(${EXECUTABLE}
 PUBLIC
   proto
@@ -194,7 +196,7 @@ COMMAND
   --output ${CMAKE_BINARY_DIR}/python/log_table.json
   # NOTE: This must match the logging macros described in `src/logging.hpp`.
   --macro ${LOGGING_MACROS}
-  --source_files ${SOURCES}
+  --source_files ${SOURCES} src/drv/wm8960_stm32f4.cpp
   --source_version ${PROJECT_VERSION}
 WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
 )

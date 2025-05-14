@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cstdint>
+#include <source_location>
 #include <string_view>
 
 #include "errors.hpp"

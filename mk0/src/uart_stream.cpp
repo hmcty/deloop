@@ -1,32 +1,35 @@
 #include "uart_stream.hpp"
 
 #include <cstring>
+#include <pb_decode.h>
+#include <pb_encode.h>
+#include <stm32f4xx_hal.h>
+#include <stm32f4xx_hal_uart.h>
 
-#include "stm32f4xx_hal.h"
-#include "stm32f4xx_hal_uart.h"
+#include <FreeRTOS.h> // Must appear before other FreeRTOS includes
+#include <queue.h>
 
-#include "FreeRTOS.h"
-#include "queue.h"
-
-#include "log.pb.h"
-#include "pb_decode.h"
-#include "pb_encode.h"
-#include "stream.pb.h"
 #include "command.pb.h"
-
 #include "errors.hpp"
+#include "log.pb.h"
 #include "logging.hpp"
+#include "stream.pb.h"
 
-const size_t kQueueSize = 8;
+const size_t kStreamQueueSize = 8;
+const size_t kCmdQueueSize = 8;
 const size_t kTaskStackSize = configMINIMAL_STACK_SIZE * 2;
 
 static struct {
   bool initialized;
   UART_HandleTypeDef *uart_handle;
 
-  StaticQueue_t queue_info;
-  uint8_t queue_buffer[kQueueSize * StreamPacket_size];
-  QueueHandle_t queue_handle;
+  StaticQueue_t stream_queue_info;
+  uint8_t stream_queue_buffer[kStreamQueueSize * StreamPacket_size];
+  QueueHandle_t stream_queue_handle;
+
+  StaticQueue_t cmd_queue_info;
+  uint8_t cmd_queue_buffer[kCmdQueueSize * StreamPacket_size];
+  QueueHandle_t cmd_queue_handle;
 
   StaticTask_t task_info;
   StackType_t task_stack[kTaskStackSize];
@@ -35,9 +38,6 @@ static struct {
   uint8_t rx_buffer[StreamPacket_size + 2];
   bool rx_start_byte_received;
   uint8_t rx_packet_size;
-
-  // Command handler
-  deloop::UartStream::CommandHandler cmd_handler;
 } _state;
 
 static void StreamTask(void *pvParameters);
@@ -59,22 +59,15 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
     _state.rx_packet_size = _state.rx_buffer[0];
 
     // Continue receiving to get the rest of the packet
-    HAL_UART_Receive_IT(_state.uart_handle, &_state.rx_buffer[0], _state.rx_packet_size);
+    HAL_UART_Receive_IT(_state.uart_handle, &_state.rx_buffer[0],
+                        _state.rx_packet_size);
   } else {
 
     Command cmd = Command_init_zero;
-    pb_istream_t stream = pb_istream_from_buffer(&_state.rx_buffer[0], _state.rx_packet_size);
+    pb_istream_t stream =
+        pb_istream_from_buffer(&_state.rx_buffer[0], _state.rx_packet_size);
     if (pb_decode(&stream, Command_fields, &cmd)) {
-      // Handle the command if we have a handler
-      if (_state.cmd_handler) {
-        _state.cmd_handler(cmd);
-      } else {
-        // No handler registered, send error
-        CommandResponse resp = CommandResponse_init_zero;
-        resp.cmd_id = cmd.cmd_id;
-        resp.status = CommandStatus_ERR_UNSUPPORTED_COMMAND;
-        deloop::UartStream::SendCommandResponse(resp, false);
-      }
+      xQueueSendToBackFromISR(_state.cmd_queue_handle, (void *)&cmd, NULL);
     } else {
       DELOOP_LOG_ERROR_FROM_ISR("Failed to decode command");
     }
@@ -88,7 +81,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
   }
 }
 
-deloop::Error deloop::UartStream::Init(UART_HandleTypeDef *uart_handle) {
+deloop::Error deloop::UartStream::init(UART_HandleTypeDef *uart_handle) {
   if (_state.initialized) {
     return deloop::Error::kAlreadyInitialized;
   }
@@ -97,10 +90,13 @@ deloop::Error deloop::UartStream::Init(UART_HandleTypeDef *uart_handle) {
 
   _state.uart_handle = uart_handle;
 
-  // Initialize queue
-  _state.queue_handle =
-      xQueueCreateStatic(kQueueSize, sizeof(StreamPacket), _state.queue_buffer,
-                         &_state.queue_info);
+  // Initialize queues
+  _state.stream_queue_handle =
+      xQueueCreateStatic(kStreamQueueSize, sizeof(StreamPacket),
+                         _state.stream_queue_buffer, &_state.stream_queue_info);
+  _state.cmd_queue_handle =
+      xQueueCreateStatic(kCmdQueueSize, sizeof(Command),
+                         _state.cmd_queue_buffer, &_state.cmd_queue_info);
 
   xTaskCreateStatic(StreamTask, "UART Stream", kTaskStackSize, NULL, 1,
                     _state.task_stack, &_state.task_info);
@@ -120,6 +116,7 @@ void deloop::SubmitLog(deloop::LogLevel level, const uint64_t hash,
                        const std::array<LogArg, 4> &args, bool blocking) {
   LogRecord record = LogRecord_init_zero;
   record.hash = hash;
+
   switch (level) {
   case deloop::LogLevel::INFO:
     record.level = LogLevel_INFO;
@@ -167,26 +164,22 @@ void deloop::SubmitLog(deloop::LogLevel level, const uint64_t hash,
   packet.payload.log = record;
 
   if (blocking) {
-    xQueueSendToBack(_state.queue_handle, (void *)&packet, 1000);
+    xQueueSendToBack(_state.stream_queue_handle, (void *)&packet, 1000);
   } else {
-    xQueueSendToBackFromISR(_state.queue_handle, (void *)&packet, NULL);
+    xQueueSendToBackFromISR(_state.stream_queue_handle, (void *)&packet, NULL);
   }
 }
 
-void deloop::UartStream::RegisterCommandHandler(CommandHandler handler) {
-  _state.cmd_handler = handler;
-}
-
-void deloop::UartStream::SendCommandResponse(const CommandResponse &resp, bool blocking) {
+void deloop::UartStream::sendCommandResponse(const CommandResponse &resp) {
   StreamPacket packet = StreamPacket_init_zero;
   packet.which_payload = StreamPacket_cmd_response_tag;
   packet.payload.cmd_response = resp;
 
-  if (blocking) {
-    xQueueSendToBack(_state.queue_handle, (void *)&packet, 1000);
-  } else {
-    xQueueSendToBackFromISR(_state.queue_handle, (void *)&packet, NULL);
-  }
+  xQueueSendToBack(_state.stream_queue_handle, (void *)&packet, 1000);
+}
+
+QueueHandle_t deloop::UartStream::getCmdQueue() {
+  return _state.cmd_queue_handle;
 }
 
 static void StreamTask(void *pvParameters) {
@@ -201,7 +194,8 @@ static void StreamTask(void *pvParameters) {
       continue;
     }
 
-    if (xQueueReceive(_state.queue_handle, &packet, portMAX_DELAY) == pdTRUE) {
+    if (xQueueReceive(_state.stream_queue_handle, &packet, portMAX_DELAY) ==
+        pdTRUE) {
       tx_buffer[0] = 0xEB; // Start byte
       // TODO: Add checksum and escape sequence for start byte
       pb_ostream_t stream =
