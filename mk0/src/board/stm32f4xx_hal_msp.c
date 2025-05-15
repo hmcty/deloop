@@ -130,8 +130,8 @@ void HAL_SAI_MspInit(SAI_HandleTypeDef *hsai) {
     HAL_DMA_DeInit(&hdma_tx);
     HAL_DMA_Init(&hdma_tx);
 
-    //HAL_NVIC_SetPriority(DMA2_Stream5_IRQn, 0x09, 0);
-    //HAL_NVIC_EnableIRQ(DMA2_Stream5_IRQn);
+    // HAL_NVIC_SetPriority(DMA2_Stream5_IRQn, 0x09, 0);
+    // HAL_NVIC_EnableIRQ(DMA2_Stream5_IRQn);
   } else if (hsai->Instance == SAIx_RX_BLOCK) {
     // SAI1_B_FS
     GPIO_InitStruct.Pin = SAIx_RX_SD_PIN;
@@ -161,9 +161,9 @@ void HAL_SAI_MspInit(SAI_HandleTypeDef *hsai) {
 }
 
 void HAL_I2C_MspInit(I2C_HandleTypeDef *hi2c) {
-  if (hi2c->Instance != I2C1) {
-    return;
-  }
+  // if (hi2c->Instance != I2C1) {
+  //   return;
+  // }
 
   GPIO_InitTypeDef GPIO_InitStruct;
   __HAL_RCC_GPIOB_CLK_ENABLE();

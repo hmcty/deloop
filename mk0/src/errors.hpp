@@ -28,6 +28,10 @@ enum class Error : int32_t {
   kSaiBusy = -8,
   kSaiHalError = -9,
   kSaiTimeout = -10,
+
+  // Audio Scheduler
+  kSchedulerCallbacksFull = -11,
+  kSchedulerBusy = -12,
 };
 
 } // namespace deloop

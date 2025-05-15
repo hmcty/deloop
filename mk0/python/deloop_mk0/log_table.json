@@ -110,5 +110,25 @@
   "3277987417236722513": {
     "msg": "[WM8960] Failed to write to register 0x%02X:\n      // 0x%02X",
     "latest_version": "0.3.0"
+  },
+  "1834427263291514": {
+    "msg": "Failed to initialize audio stream: %d",
+    "latest_version": "0.3.0"
+  },
+  "7465038390696226006": {
+    "msg": "[AUDIO_STREAM] Failed to initialize SAI peripheral: %d",
+    "latest_version": "0.3.0"
+  },
+  "3863698794388220064": {
+    "msg": "[AUDIO_STREAM] Failed to enable Rx DMA: %d",
+    "latest_version": "0.3.0"
+  },
+  "3316646963271591410": {
+    "msg": "[AUDIO_STREAM] Failed to enable Tx DMA: %d",
+    "latest_version": "0.3.0"
+  },
+  "10575288284826478490": {
+    "msg": "Failed to start audio stream: %d",
+    "latest_version": "0.3.0"
   }
 }

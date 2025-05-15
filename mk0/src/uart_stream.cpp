@@ -81,7 +81,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
   }
 }
 
-deloop::Error deloop::UartStream::init(UART_HandleTypeDef *uart_handle) {
+deloop::Error deloop::uart_stream::init(UART_HandleTypeDef *uart_handle) {
   if (_state.initialized) {
     return deloop::Error::kAlreadyInitialized;
   }
@@ -170,7 +170,7 @@ void deloop::SubmitLog(deloop::LogLevel level, const uint64_t hash,
   }
 }
 
-void deloop::UartStream::sendCommandResponse(const CommandResponse &resp) {
+void deloop::uart_stream::sendCommandResponse(const CommandResponse &resp) {
   StreamPacket packet = StreamPacket_init_zero;
   packet.which_payload = StreamPacket_cmd_response_tag;
   packet.payload.cmd_response = resp;
@@ -178,7 +178,7 @@ void deloop::UartStream::sendCommandResponse(const CommandResponse &resp) {
   xQueueSendToBack(_state.stream_queue_handle, (void *)&packet, 1000);
 }
 
-QueueHandle_t deloop::UartStream::getCmdQueue() {
+QueueHandle_t deloop::uart_stream::getCmdQueue() {
   return _state.cmd_queue_handle;
 }
 

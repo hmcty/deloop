@@ -1,9 +1,7 @@
 #pragma once
 
 #include <cstdint>
-#include <expected>
 #include <stm32f4xx_hal_i2c.h>
-#include <stm32f4xx_hal_sai.h>
 
 #include "errors.hpp"
 
@@ -212,28 +210,20 @@ class WM8960 {
 public:
   WM8960() = default;
 
-  Error init(I2C_TypeDef *i2c, SAI_Block_TypeDef *sai_rx,
-             SAI_Block_TypeDef *sai_tx);
+  Error init(I2C_TypeDef *i2c);
   Error resetToDefaults(void);
-
   Error writeRegister(uint8_t reg_addr, uint16_t data);
-  std::expected<uint16_t, Error> readRegister(uint8_t reg_addr);
-
-  Error startRecording(uint8_t *buf, uint16_t size);
+  Error startRecording(void);
   Error stopRecording(void);
-
-  Error startPlayback(uint8_t *buf, uint16_t size);
+  Error startPlayback(void);
   Error stopPlayback(void);
-
   Error setVolume(float volume);
 
 private:
   bool initialized_ = false;
 
   // @todo: Template handlers for flexibility.
-  I2C_HandleTypeDef i2c_handle_ = {0};
-  SAI_HandleTypeDef sai_rx_handle_ = {0};
-  SAI_HandleTypeDef sai_tx_handle_ = {0};
+  I2C_HandleTypeDef i2c_handle_;
 };
 
 } // namespace deloop

@@ -12,11 +12,11 @@
 #include "errors.hpp"
 
 namespace deloop {
-namespace UartStream {
+namespace uart_stream {
 
-deloop::Error init(UART_HandleTypeDef *uart_handle);
+Error init(UART_HandleTypeDef *uart_handle);
 QueueHandle_t getCmdQueue();
 void sendCommandResponse(const CommandResponse &resp);
 
-} // namespace UartStream
+} // namespace uart_stream
 } // namespace deloop

@@ -54,7 +54,7 @@ set(INTERNAL_OPTIONS  # Not applied to third-party libraries.
   -Wdouble-promotion
 )
 set(OPTIMIZATION_OPTIONS
-  $<$<CONFIG:Debug>:-Og>
+  $<$<CONFIG:Debug>:"-Og">
 )
 set(DEPENDENCY_INFO_OPTIONS
   -MMD  # Generate dependency files.
@@ -71,7 +71,6 @@ add_compile_options(
   ${OPTIMIZATION_OPTIONS}
   ${DEPENDENCY_INFO_OPTIONS}
   ${DEBUG_INFO_OPTIONS}
-  $<$<COMPILE_LANGUAGE:CXX>:${CXX_OPTIONS}>
 )
 
 # LINKER OPTIONS
@@ -145,6 +144,8 @@ set(SOURCES
   src/main.cpp
   src/rtos_hooks.cpp
   src/uart_stream.cpp
+  src/audio/scheduler.cpp
+  src/audio/stream.cpp
   src/startup/startup_stm32f446xx.s
   src/board/stm32f4xx_it.h
   src/board/stm32f4xx_it.c

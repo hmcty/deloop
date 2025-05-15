@@ -11,38 +11,17 @@
 #include "drv/wm8960.hpp"
 #include "errors.hpp"
 #include "logging.hpp"
-#include "stm32f446xx.h"
-
-static void SAI_RxCpltCallback(SAI_HandleTypeDef *hsai) {
-  DELOOP_LOG_INFO("[WM8960] SAI Rx complete callback.");
-}
-
-static inline deloop::Error ConvertStatus(HAL_StatusTypeDef status) {
-  switch (status) {
-  case HAL_OK:
-    return deloop::Error::kOk;
-  case HAL_BUSY:
-    return deloop::Error::kSaiBusy;
-  case HAL_ERROR:
-    return deloop::Error::kSaiHalError;
-  case HAL_TIMEOUT:
-    return deloop::Error::kSaiTimeout;
-  default:
-    return deloop::Error::kSaiHalError;
-  }
-}
+#include "stm32f4xx_hal_def.h"
 
 namespace deloop {
 
-Error WM8960::init(I2C_TypeDef *i2c, SAI_Block_TypeDef *sai_rx,
-                   SAI_Block_TypeDef *sai_tx) {
+Error WM8960::init(I2C_TypeDef *i2c) {
   if (initialized_) {
     return Error::kAlreadyInitialized;
   }
 
-  // TODO: Make instances configurable.
   // Initialize I2C.
-  i2c_handle_.Instance = i2c;
+  i2c_handle_.Instance = I2C1;
   i2c_handle_.Init.ClockSpeed = 100000;
   i2c_handle_.Init.DutyCycle = I2C_DUTYCYCLE_2;
   i2c_handle_.Init.OwnAddress1 = 0;
@@ -53,50 +32,6 @@ Error WM8960::init(I2C_TypeDef *i2c, SAI_Block_TypeDef *sai_rx,
   i2c_handle_.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
   if (HAL_I2C_Init(&i2c_handle_) != HAL_OK) {
     DELOOP_LOG_ERROR("[WM8960] Failed to initialize I2C peripheral.");
-    return Error::kFailedToInitializePeripheral;
-  }
-
-  // Initialize SAI Rx.
-  __HAL_SAI_RESET_HANDLE_STATE(&sai_rx_handle_);
-  sai_rx_handle_.Instance = sai_rx;
-  __HAL_SAI_DISABLE(&sai_rx_handle_);
-
-  sai_rx_handle_.Init.AudioMode = SAI_MODESLAVE_RX;
-  sai_rx_handle_.Init.Synchro = SAI_SYNCHRONOUS;
-  sai_rx_handle_.Init.OutputDrive = SAI_OUTPUTDRIVE_DISABLE;
-  sai_rx_handle_.Init.NoDivider = SAI_MASTERDIVIDER_DISABLE;
-  sai_rx_handle_.Init.FIFOThreshold = SAI_FIFOTHRESHOLD_1QF;
-  // The following settings are applied by HAL_SAI_InitProtocol below:
-  // - Protocol, DataSize, FirstBit, ClockStrobing, etc.
-  sai_rx_handle_.Init.ClockSource = SAI_CLKSOURCE_PLLSAI;
-  sai_rx_handle_.Init.AudioFrequency = SAI_AUDIO_FREQUENCY_48K;
-
-  if (HAL_SAI_InitProtocol(&sai_rx_handle_, SAI_I2S_STANDARD,
-                           SAI_PROTOCOL_DATASIZE_24BIT, 2) != HAL_OK) {
-    DELOOP_LOG_ERROR("[WM8960] Failed to initialize SAI peripheral: %d",
-                     (uint32_t)HAL_SAI_GetError(&sai_rx_handle_));
-    return Error::kFailedToInitializePeripheral;
-  }
-
-  // Initialize SAI Tx.
-  __HAL_SAI_RESET_HANDLE_STATE(&sai_tx_handle_);
-  sai_tx_handle_.Instance = sai_tx;
-  __HAL_SAI_DISABLE(&sai_tx_handle_);
-
-  sai_tx_handle_.Init.AudioMode = SAI_MODEMASTER_TX;
-  sai_tx_handle_.Init.Synchro = SAI_ASYNCHRONOUS;
-  sai_tx_handle_.Init.OutputDrive = SAI_OUTPUTDRIVE_ENABLE;
-  sai_tx_handle_.Init.NoDivider = SAI_MASTERDIVIDER_ENABLE;
-  sai_tx_handle_.Init.FIFOThreshold = SAI_FIFOTHRESHOLD_1QF;
-  // The following settings are applied by HAL_SAI_InitProtocol below:
-  // - Protocol, DataSize, FirstBit, ClockStrobing, etc.
-  sai_tx_handle_.Init.ClockSource = SAI_CLKSOURCE_PLLSAI;
-  sai_tx_handle_.Init.AudioFrequency = SAI_AUDIO_FREQUENCY_48K;
-
-  if (HAL_SAI_InitProtocol(&sai_tx_handle_, SAI_I2S_STANDARD,
-                           SAI_PROTOCOL_DATASIZE_24BIT, 2) != HAL_OK) {
-    DELOOP_LOG_ERROR("[WM8960] Failed to initialize SAI peripheral: %d",
-                     (uint32_t)HAL_SAI_GetError(&sai_tx_handle_));
     return Error::kFailedToInitializePeripheral;
   }
 
@@ -182,9 +117,6 @@ Error WM8960::resetToDefaults(void) {
     return error;
   }
 
-  __HAL_SAI_ENABLE(&sai_tx_handle_);
-  __HAL_SAI_ENABLE(&sai_rx_handle_);
-
   return Error::kOk;
 }
 
@@ -227,14 +159,12 @@ Error WM8960::writeRegister(uint8_t reg_addr, uint16_t data) {
   }
 }
 
-Error WM8960::startRecording(uint8_t *buf, uint16_t size) {
+Error WM8960::startRecording(void) {
   if (!initialized_) {
     return Error::kNotInitialized;
-  } else if (buf == nullptr || size == 0) {
-    return Error::kInvalidArgument;
   }
 
-  return ConvertStatus(HAL_SAI_Receive_DMA(&sai_rx_handle_, buf, size));
+  return Error::kOk;
 }
 
 Error WM8960::stopRecording(void) {
@@ -242,17 +172,15 @@ Error WM8960::stopRecording(void) {
     return Error::kNotInitialized;
   }
 
-  return ConvertStatus(HAL_SAI_DMAStop(&sai_rx_handle_));
+  return Error::kOk;
 }
 
-Error WM8960::startPlayback(uint8_t *buf, uint16_t size) {
+Error WM8960::startPlayback(void) {
   if (!initialized_) {
     return Error::kNotInitialized;
-  } else if (buf == nullptr || size == 0) {
-    return Error::kInvalidArgument;
   }
 
-  return ConvertStatus(HAL_SAI_Transmit_DMA(&sai_tx_handle_, buf, size));
+  return Error::kOk;
 }
 
 Error WM8960::stopPlayback(void) {
@@ -260,7 +188,7 @@ Error WM8960::stopPlayback(void) {
     return Error::kNotInitialized;
   }
 
-  return ConvertStatus(HAL_SAI_DMAStop(&sai_tx_handle_));
+  return Error::kOk;
 }
 
 Error WM8960::setVolume(float volume) {

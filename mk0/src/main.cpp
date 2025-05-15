@@ -6,18 +6,15 @@
 #include <stm32f4xx_hal_sai.h>
 #include <stm32f4xx_hal_uart.h>
 
-// #include "FreeRTOSConfig.h"
 #include <FreeRTOS.h> // Must appear before other FreeRTOS includes
 #include <queue.h>
 #include <task.h>
 
-#include "audio/luts.hpp"
+#include "audio/stream.hpp"
 #include "command.pb.h"
 #include "drv/wm8960.hpp"
 #include "logging.hpp"
 #include "uart_stream.hpp"
-
-extern const std::array<int32_t, SINE_TABLE_SIZE> SINE_TABLE;
 
 static void ConfigureSystemClock(void);
 static void ConfigureHALPeripherals(void);
@@ -25,12 +22,10 @@ static void ErrorHandler(void);
 static void CommandHandler(const Command &cmd);
 static void CoreLoopTask(void *pvParameters);
 
-const size_t task_stack_size = configMINIMAL_STACK_SIZE * 2;
+const size_t task_stack_size = configMINIMAL_STACK_SIZE * 10;
 static StaticTask_t task_buffer;
 static StackType_t task_stack[task_stack_size];
 
-const uint16_t kAudioBufSize = 100;
-static uint32_t audio_buf[kAudioBufSize] = {0};
 static bool recording = false;
 static bool playback = false;
 
@@ -49,7 +44,7 @@ int main(void) {
   ConfigureSystemClock();
   ConfigureHALPeripherals();
 
-  deloop::Error err = deloop::UartStream::init(&uart2_handle);
+  deloop::Error err = deloop::uart_stream::init(&uart2_handle);
   if (err != deloop::Error::kOk) {
     ErrorHandler();
   }
@@ -171,7 +166,7 @@ static void CommandHandler(deloop::WM8960 &wm8960, const Command &cmd) {
       auto error = wm8960.stopRecording();
       if (error != deloop::Error::kOk) {
         DELOOP_LOG_ERROR_FROM_ISR("Failed to stop recording: %d", error);
-        deloop::UartStream::sendCommandResponse(CommandResponse{
+        deloop::uart_stream::sendCommandResponse(CommandResponse{
             .cmd_id = cmd.cmd_id,
             .status = CommandStatus_ERR_INTERNAL,
         });
@@ -180,10 +175,10 @@ static void CommandHandler(deloop::WM8960 &wm8960, const Command &cmd) {
 
       recording = cmd.request.configure_recording.enable;
       if (recording) {
-        error = wm8960.startRecording((uint8_t *)audio_buf, kAudioBufSize);
+        error = wm8960.startRecording();
         if (error != deloop::Error::kOk) {
           DELOOP_LOG_ERROR_FROM_ISR("Failed to start recording: %d", error);
-          deloop::UartStream::sendCommandResponse(CommandResponse{
+          deloop::uart_stream::sendCommandResponse(CommandResponse{
               .cmd_id = cmd.cmd_id,
               .status = CommandStatus_ERR_INTERNAL,
           });
@@ -194,7 +189,7 @@ static void CommandHandler(deloop::WM8960 &wm8960, const Command &cmd) {
         DELOOP_LOG_INFO_FROM_ISR("Successfully started recording");
       }
 
-      deloop::UartStream::sendCommandResponse(CommandResponse{
+      deloop::uart_stream::sendCommandResponse(CommandResponse{
           .cmd_id = cmd.cmd_id,
           .status = CommandStatus_SUCCESS,
       });
@@ -215,7 +210,7 @@ static void CommandHandler(deloop::WM8960 &wm8960, const Command &cmd) {
       auto error = wm8960.setVolume(volume);
       if (error != deloop::Error::kOk) {
         DELOOP_LOG_ERROR_FROM_ISR("Failed to set volume: %d", error);
-        deloop::UartStream::sendCommandResponse(CommandResponse{
+        deloop::uart_stream::sendCommandResponse(CommandResponse{
             .cmd_id = cmd.cmd_id,
             .status = CommandStatus_ERR_INTERNAL,
         });
@@ -230,7 +225,7 @@ static void CommandHandler(deloop::WM8960 &wm8960, const Command &cmd) {
       auto error = wm8960.stopPlayback();
       if (error != deloop::Error::kOk) {
         DELOOP_LOG_ERROR_FROM_ISR("Failed to stop playback: %d", error);
-        deloop::UartStream::sendCommandResponse(CommandResponse{
+        deloop::uart_stream::sendCommandResponse(CommandResponse{
             .cmd_id = cmd.cmd_id,
             .status = CommandStatus_ERR_INTERNAL,
         });
@@ -239,14 +234,13 @@ static void CommandHandler(deloop::WM8960 &wm8960, const Command &cmd) {
 
       playback = config_request.enable;
       if (playback) {
-        error =
-            wm8960.startPlayback((uint8_t *)SINE_TABLE.data(), SINE_TABLE_SIZE);
+        error = wm8960.startPlayback();
         // error =
         //     deloop::WM8960::StartPlayback((uint8_t *)audio_buf,
         //     kAudioBufSize);
         if (error != deloop::Error::kOk) {
           DELOOP_LOG_ERROR_FROM_ISR("Failed to start playback: %d", error);
-          deloop::UartStream::sendCommandResponse(CommandResponse{
+          deloop::uart_stream::sendCommandResponse(CommandResponse{
               .cmd_id = cmd.cmd_id,
               .status = CommandStatus_ERR_INTERNAL,
           });
@@ -258,7 +252,7 @@ static void CommandHandler(deloop::WM8960 &wm8960, const Command &cmd) {
       }
     }
 
-    deloop::UartStream::sendCommandResponse(CommandResponse{
+    deloop::uart_stream::sendCommandResponse(CommandResponse{
         .cmd_id = cmd.cmd_id,
         .status = CommandStatus_SUCCESS,
     });
@@ -273,19 +267,32 @@ static void CoreLoopTask(void *pvParameters) {
   (void)pvParameters;
 
   DELOOP_LOG_INFO("Starting core loop...");
-  deloop::WM8960 wm8960;
-  auto err = wm8960.init(I2C1, SAI1_Block_A, SAI1_Block_B);
+  deloop::WM8960 wm8960 = deloop::WM8960();
+  auto err = wm8960.init(I2C1);
   if (err != deloop::Error::kOk) {
     DELOOP_LOG_ERROR("Failed to initialize WM8960: %d", err);
     ErrorHandler();
   }
 
+  auto error = deloop::audio_stream::init(SAI1_Block_A, SAI1_Block_B);
+  if (error != deloop::Error::kOk) {
+    DELOOP_LOG_ERROR("Failed to initialize audio stream: %d", error);
+    ErrorHandler();
+  }
+
+  error = deloop::audio_stream::start();
+  if (error != deloop::Error::kOk) {
+    DELOOP_LOG_ERROR("Failed to start audio stream: %d", error);
+    ErrorHandler();
+  }
+
   Command cmd = Command_init_zero;
-  QueueHandle_t cmd_queue = deloop::UartStream::getCmdQueue();
+  QueueHandle_t cmd_queue = deloop::uart_stream::getCmdQueue();
 
   while (1) {
     if (xQueueReceive(cmd_queue, &cmd, portMAX_DELAY) == pdTRUE) {
-      CommandHandler(wm8960, cmd);
+      wm8960.resetToDefaults();
+      // CommandHandler(wm8960, cmd);
     }
   }
 }
