@@ -1,8 +1,9 @@
-#include "stm32f4xx_it.h"
-#include "stm32f4xx_hal.h"
-#include "stm32f4xx_hal_uart.h"
+#include <stm32f4xx_hal.h>
+#include <stm32f4xx_hal_uart.h>
 
-#include <stdint.h>
+#include "stm32f446xx.h"
+#include "stm32f4xx_hal_sai.h"
+#include "stm32f4xx_it.h"
 
 /* External variables --------------------------------------------------------*/
 extern UART_HandleTypeDef uart2_handle;
@@ -102,15 +103,18 @@ void DebugMon_Handler(void) {}
  * @param  None
  * @retval None
  */
-void USART2_IRQHandler(void) {
-  HAL_UART_IRQHandler(&uart2_handle);
-}
+void USART2_IRQHandler(void) { HAL_UART_IRQHandler(&uart2_handle); }
 
 /**
- * @brief  This function handles PPP interrupt request.
+ * @brief  This function handles DMA2 stream 5 interrupt request.
  * @param  None
  * @retval None
  */
-/*void PPP_IRQHandler(void)
-{
-}*/
+void DMA2_Stream5_IRQHandler(void) { Audio_DMA_Tx_IRQHandler(); }
+
+/**
+ * @brief  This function handles DMA2 stream 6 interrupt request.
+ * @param  None
+ * @retval None
+ */
+void DMA2_Stream3_IRQHandler(void) { Audio_DMA_Rx_IRQHandler(); }

@@ -6,6 +6,7 @@
 #include <functional>
 
 #include "errors.hpp"
+#include "logging.hpp"
 
 using namespace deloop;
 
@@ -48,7 +49,7 @@ Error audio_scheduler::registerCallback(ProccessCallback callback) {
   return Error::kOk;
 }
 
-Error audio_scheduler::process(uint32_t num_frames, uint8_t *tx, uint8_t *rx) {
+Error audio_scheduler::process(uint32_t num_frames, int32_t *tx, int32_t *rx) {
   if (!state_.initialized) {
     return Error::kNotInitialized;
   } else if (num_frames == 0 || tx == nullptr || rx == nullptr) {
@@ -59,10 +60,15 @@ Error audio_scheduler::process(uint32_t num_frames, uint8_t *tx, uint8_t *rx) {
     return Error::kSchedulerBusy;
   }
 
+  Error err = Error::kOk;
   for (size_t i = 0; i < state_.num_callbacks; i++) {
-    state_.callbacks[i](num_frames, tx, rx);
+    err = state_.callbacks[i](num_frames, tx, rx);
+    if (err != Error::kOk) {
+      DELOOP_LOG_ERROR("[AUDIO_SCHEDULER] Callback failed: %d", err);
+      break;
+    }
   }
 
   state_.lock.clear(std::memory_order_release);
-  return Error::kOk;
+  return err;
 }

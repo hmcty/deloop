@@ -146,6 +146,7 @@ set(SOURCES
   src/uart_stream.cpp
   src/audio/scheduler.cpp
   src/audio/stream.cpp
+  src/audio/routines/sine.cpp
   src/startup/startup_stm32f446xx.s
   src/board/stm32f4xx_it.h
   src/board/stm32f4xx_it.c

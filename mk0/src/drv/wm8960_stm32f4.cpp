@@ -21,7 +21,7 @@ Error WM8960::init(I2C_TypeDef *i2c) {
   }
 
   // Initialize I2C.
-  i2c_handle_.Instance = I2C1;
+  i2c_handle_.Instance = i2c;
   i2c_handle_.Init.ClockSpeed = 100000;
   i2c_handle_.Init.DutyCycle = I2C_DUTYCYCLE_2;
   i2c_handle_.Init.OwnAddress1 = 0;

@@ -10,6 +10,8 @@
 #include <queue.h>
 #include <task.h>
 
+#include "audio/routines/sine.hpp"
+#include "audio/scheduler.hpp"
 #include "audio/stream.hpp"
 #include "command.pb.h"
 #include "drv/wm8960.hpp"
@@ -274,6 +276,20 @@ static void CoreLoopTask(void *pvParameters) {
     ErrorHandler();
   }
 
+  err = deloop::audio_scheduler::init();
+  if (err != deloop::Error::kOk) {
+    DELOOP_LOG_ERROR("[AUDIO_STREAM] Failed to initialize audio scheduler: %d",
+                     err);
+    return;
+  }
+
+  err = deloop::audio_scheduler::registerCallback(tx_sine);
+  if (err != deloop::Error::kOk) {
+    DELOOP_LOG_ERROR("[AUDIO_STREAM] Failed to register audio callback: %d",
+                     err);
+    return;
+  }
+
   auto error = deloop::audio_stream::init(SAI1_Block_A, SAI1_Block_B);
   if (error != deloop::Error::kOk) {
     DELOOP_LOG_ERROR("Failed to initialize audio stream: %d", error);
@@ -291,8 +307,7 @@ static void CoreLoopTask(void *pvParameters) {
 
   while (1) {
     if (xQueueReceive(cmd_queue, &cmd, portMAX_DELAY) == pdTRUE) {
-      wm8960.resetToDefaults();
-      // CommandHandler(wm8960, cmd);
+      CommandHandler(wm8960, cmd);
     }
   }
 }

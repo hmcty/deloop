@@ -120,9 +120,9 @@ void HAL_SAI_MspInit(SAI_HandleTypeDef *hsai) {
     hdma_tx.Init.PeriphDataAlignment = DMA_PDATAALIGN_WORD;
     hdma_tx.Init.MemDataAlignment = DMA_MDATAALIGN_WORD;
     hdma_tx.Init.Mode = DMA_CIRCULAR;
-    hdma_tx.Init.Priority = DMA_PRIORITY_HIGH;
-    hdma_tx.Init.FIFOMode = DMA_FIFOMODE_ENABLE;
-    hdma_tx.Init.FIFOThreshold = DMA_FIFO_THRESHOLD_FULL;
+    hdma_tx.Init.Priority = DMA_PRIORITY_VERY_HIGH;
+    hdma_tx.Init.FIFOMode = DMA_FIFOMODE_DISABLE;
+    // hdma_tx.Init.FIFOThreshold = DMA_FIFO_THRESHOLD_FULL;
     hdma_tx.Init.MemBurst = DMA_MBURST_SINGLE;
     hdma_tx.Init.PeriphBurst = DMA_PBURST_SINGLE;
 
@@ -130,8 +130,8 @@ void HAL_SAI_MspInit(SAI_HandleTypeDef *hsai) {
     HAL_DMA_DeInit(&hdma_tx);
     HAL_DMA_Init(&hdma_tx);
 
-    // HAL_NVIC_SetPriority(DMA2_Stream5_IRQn, 0x09, 0);
-    // HAL_NVIC_EnableIRQ(DMA2_Stream5_IRQn);
+    HAL_NVIC_SetPriority(DMA2_Stream5_IRQn, 5, 0);
+    HAL_NVIC_EnableIRQ(DMA2_Stream5_IRQn);
   } else if (hsai->Instance == SAIx_RX_BLOCK) {
     // SAI1_B_FS
     GPIO_InitStruct.Pin = SAIx_RX_SD_PIN;
@@ -157,17 +157,19 @@ void HAL_SAI_MspInit(SAI_HandleTypeDef *hsai) {
     __HAL_LINKDMA(hsai, hdmarx, hdma_rx);
     HAL_DMA_DeInit(&hdma_rx);
     HAL_DMA_Init(&hdma_rx);
+
+    HAL_NVIC_SetPriority(DMA2_Stream3_IRQn, 5, 0);
+    HAL_NVIC_EnableIRQ(DMA2_Stream3_IRQn);
   }
 }
 
 void HAL_I2C_MspInit(I2C_HandleTypeDef *hi2c) {
-  // if (hi2c->Instance != I2C1) {
-  //   return;
-  // }
+  if (hi2c->Instance != I2C1) {
+    return;
+  }
 
   GPIO_InitTypeDef GPIO_InitStruct;
   __HAL_RCC_GPIOB_CLK_ENABLE();
-  __HAL_RCC_GPIOC_CLK_ENABLE();
 
   // I2C1 GPIO Configuration
   // * PB_6 -> I2C1_SCL
@@ -175,7 +177,7 @@ void HAL_I2C_MspInit(I2C_HandleTypeDef *hi2c) {
   GPIO_InitStruct.Pin = GPIO_PIN_6;
   GPIO_InitStruct.Mode = GPIO_MODE_AF_OD;
   GPIO_InitStruct.Pull = GPIO_PULLUP;
-  GPIO_InitStruct.Speed = GPIO_SPEED_LOW;
+  GPIO_InitStruct.Speed = GPIO_SPEED_MEDIUM;
   GPIO_InitStruct.Alternate = GPIO_AF4_I2C1;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 

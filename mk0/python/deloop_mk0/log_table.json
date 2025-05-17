@@ -130,5 +130,17 @@
   "10575288284826478490": {
     "msg": "Failed to start audio stream: %d",
     "latest_version": "0.3.0"
+  },
+  "12432027179713482088": {
+    "msg": "[AUDIO_STREAM] Failed to initialize audio scheduler: %d",
+    "latest_version": "0.3.0"
+  },
+  "6900656087026024931": {
+    "msg": "[AUDIO_STREAM] Tx and Rx notification mismatch: %d",
+    "latest_version": "0.3.0"
+  },
+  "11292525515241016925": {
+    "msg": "[AUDIO_STREAM] Invalid notification: %d",
+    "latest_version": "0.3.0"
   }
 }
