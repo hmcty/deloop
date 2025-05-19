@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <functional>
 
-#include "errors.hpp"
+#include "mk0/errors.h"
 
 namespace deloop {
 namespace audio_scheduler {

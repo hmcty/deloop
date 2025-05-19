@@ -10,14 +10,9 @@ let
     ./external
     ./proto
     ./python/deloop_mk0/log_table.json
-    (fs.fileFilter
-      (file: file.hasExt "c"
-              || file.hasExt "cpp"
-              || file.hasExt "h"
-              || file.hasExt "hpp"
-              || file.hasExt "ld"
-              || file.hasExt "s")
-      ./src)
+    (fs.fileFilter (file: file.hasExt "cpp") ./src)
+    (fs.fileFilter (file: file.hasExt "cpp" || file.hasExt "s" || file.hasExt "h" || file.hasExt "ld") ./targets)
+    (fs.fileFilter (file: file.hasExt "h") ./include)
   ];
 
   mkDeloopDerivation = {

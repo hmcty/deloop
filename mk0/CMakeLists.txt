@@ -12,13 +12,13 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # MCU OPTIONS
-set(MCU_TARGET "CORTEX_M4" CACHE STRING "Target platform for compilation")
+set(MCU_TARGET "STM32F446" CACHE STRING "Target platform for compilation")
 set_property(CACHE MCU_TARGET PROPERTY STRINGS
-  CORTEX_M4
+  STM32F4XX
   HOST  # For unit tests
 )
 
-if (MCU_TARGET STREQUAL "CORTEX_M4")
+if (MCU_TARGET STREQUAL "STM32F446")
   set(MCU_OPTIONS
     -mcpu=cortex-m4
     -mthumb
@@ -27,12 +27,23 @@ if (MCU_TARGET STREQUAL "CORTEX_M4")
   )
   set(MCU_LINKER_OPTIONS
     -specs=nano.specs
-    -T${CMAKE_SOURCE_DIR}/src/linker/STM32F446RE_FLASH.ld
+    -T${CMAKE_SOURCE_DIR}/targets/stm32f4/stm32f446_flash.ld
+  )
+  set(MCU_HAL_PATH ${CMAKE_SOURCE_DIR}/targets/stm32f4)
+  set(MCU_HAL_SRCS
+    ${MCU_HAL_PATH}/startup_stm32f446xx.s
+    ${MCU_HAL_PATH}/stm32f4xx_hal_msp.cpp
+    ${MCU_HAL_PATH}/stm32f4xx_it.cpp
+    ${MCU_HAL_PATH}/system_stm32f4xx.cpp
   )
   set(FREERTOS_PORT GCC_ARM_CM4F)
 elseif (MCU_TARGET STREQUAL "HOST")
   set(MCU_OPTIONS "")
   set(MCU_LINKER_OPTIONS "")
+  set(MCU_HAL_PATH ${CMAKE_SOURCE_DIR}/targets/host)
+  set(MCU_HAL_SRCS
+    ${MCU_HAL_PATH}/stm32_hal_dummy.cpp
+  )
   set(FREERTOS_PORT GCC_POSIX)
 else()
   message(FATAL_ERROR "Unsupported MCU target: ${MCU_TARGET}")
@@ -86,14 +97,15 @@ add_link_options(
 # FreeRTOS
 set(FREERTOS_KERNEL_PATH ${CMAKE_SOURCE_DIR}/external/FreeRTOS/FreeRTOS/Source)
 add_library(freertos_config INTERFACE)
-target_include_directories(freertos_config INTERFACE ${CMAKE_SOURCE_DIR}/src/config)
+target_include_directories(freertos_config INTERFACE ${CMAKE_SOURCE_DIR}/targets/)
 add_subdirectory(${FREERTOS_KERNEL_PATH} ${CMAKE_BINARY_DIR}/FreeRTOS-Kernel)
 
 # STM32CubeF4
 include(cmake/STM32CubeF4.cmake)
 add_STM32CubeF4_library(stm32f4xx_hal
+  STM32F446xx
   ${CMAKE_SOURCE_DIR}/external/STM32CubeF4
-  ${CMAKE_SOURCE_DIR}/src/config
+  ${CMAKE_SOURCE_DIR}/targets/stm32f4
 )
 
 # nanopb
@@ -118,50 +130,38 @@ COMMAND
   ${PROTO_SOURCES}
 )
 
-# DRIVERS
-add_library(wm8960_stm32f4 STATIC
-  src/drv/wm8960_stm32f4.cpp
-)
-target_compile_options(wm8960_stm32f4 PRIVATE ${INTERNAL_OPTIONS})
-target_include_directories(wm8960_stm32f4
-PUBLIC
-  ${CMAKE_SOURCE_DIR}/src
-)
-target_link_libraries(wm8960_stm32f4
-PRIVATE
-  stm32f4xx_hal_interface
-)
-
-if (NOT ENABLE_TESTING AND MCU_TARGET STREQUAL "CORTEX_M4")
-  target_link_libraries(wm8960_stm32f4
-  PRIVATE
-    stm32f4xx_hal
-  )
+# HAL LIBRARY
+add_library(hal_library STATIC ${MCU_HAL_SRCS})
+target_compile_options(hal_library PRIVATE ${INTERNAL_OPTIONS})
+target_include_directories(hal_library PUBLIC ${MCU_HAL_PATH})
+if (MCU_TARGET STREQUAL "STM32F446")
+  target_link_libraries(hal_library PUBLIC stm32f4xx_hal)
+elseif (MCU_TARGET STREQUAL "HOST")
+  target_link_libraries(hal_library PUBLIC fff stm32f4xx_hal_interface)
 endif()
+
+# DRIVERS
+add_library(wm8960_stm32f4 STATIC src/drv/wm8960_stm32f4.cpp)
+target_compile_options(wm8960_stm32f4 PRIVATE ${INTERNAL_OPTIONS})
+target_link_libraries(wm8960_stm32f4 PUBLIC hal_library)
+target_include_directories(wm8960_stm32f4 PUBLIC ${CMAKE_SOURCE_DIR}/include/)
+
 # APPLICATION
 set(EXECUTABLE ${PROJECT_NAME}.elf)
 set(SOURCES
   src/main.cpp
   src/rtos_hooks.cpp
   src/uart_stream.cpp
+  src/syscall_stubs.cpp
   src/audio/scheduler.cpp
   src/audio/stream.cpp
-  src/audio/routines/sine.cpp
-  src/startup/startup_stm32f446xx.s
-  src/board/stm32f4xx_it.h
-  src/board/stm32f4xx_it.c
-  src/board/stm32f4xx_hal_msp.c
-  src/board/system_stm32f4xx.c
+  src/audio/plugins/sine.cpp
+  src/audio/plugins/echo.cpp
 )
 
 add_executable(${EXECUTABLE} ${SOURCES})
-target_include_directories(${EXECUTABLE}
-PUBLIC
-  ${CMAKE_CURRENT_LIST_DIR}
-  ${CMAKE_SOURCE_DIR}/src
-  ${CMAKE_SOURCE_DIR}/src/config
-)
-target_compile_options(wm8960_stm32f4 PRIVATE ${INTERNAL_OPTIONS})
+target_include_directories(${EXECUTABLE} PRIVATE ${CMAKE_SOURCE_DIR}/include/)
+target_compile_options(${EXECUTABLE} PRIVATE ${INTERNAL_OPTIONS})
 target_link_libraries(${EXECUTABLE}
 PUBLIC
   proto
@@ -169,7 +169,7 @@ PUBLIC
   freertos_kernel
   freertos_config
   wm8960_stm32f4
-  stm32f4xx_hal
+  hal_library
 )
 
 # POST-BUILD COMMANDS

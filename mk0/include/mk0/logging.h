@@ -5,12 +5,12 @@
 #include <source_location>
 #include <string_view>
 
-#include "errors.hpp"
+#include "mk0/errors.h"
 
 #define DELOOP_LOG(fmt, level, blocking, ...)                                  \
   do {                                                                         \
-    std::array<deloop::LogArg, 4> args = deloop::CreateLogArgs(__VA_ARGS__);   \
-    deloop::SubmitLog(level, FNV1A_64(fmt), args, blocking);                   \
+    std::array<deloop::LogArg, 4> _args = deloop::CreateLogArgs(__VA_ARGS__);  \
+    deloop::SubmitLog(level, FNV1A_64(fmt), _args, blocking);                  \
   } while (0)
 
 #define DELOOP_LOG_INFO(fmt, ...)                                              \

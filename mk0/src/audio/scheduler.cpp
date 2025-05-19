@@ -1,12 +1,9 @@
-#include "audio/scheduler.hpp"
+#include "mk0/audio/scheduler.h"
 
-#include <array>
 #include <atomic>
-#include <cstdint>
-#include <functional>
+#include <cstring>
 
-#include "errors.hpp"
-#include "logging.hpp"
+#include "mk0/logging.h"
 
 using namespace deloop;
 
@@ -16,7 +13,7 @@ static struct {
   std::atomic_flag lock;
   std::size_t num_callbacks;
   std::array<audio_scheduler::ProccessCallback, kMaxCallbacks> callbacks;
-} state_ = {0};
+} state_;
 
 Error audio_scheduler::init(void) {
   if (state_.initialized) {
@@ -61,6 +58,7 @@ Error audio_scheduler::process(uint32_t num_frames, int32_t *tx, int32_t *rx) {
   }
 
   Error err = Error::kOk;
+  memset(tx, 0, num_frames * sizeof(int32_t));
   for (size_t i = 0; i < state_.num_callbacks; i++) {
     err = state_.callbacks[i](num_frames, tx, rx);
     if (err != Error::kOk) {

@@ -1,17 +1,16 @@
-#include <cstdlib>
+#include "mk0/drv/wm8960.h"
+
+// STM32 includes - order is important
+#include <stm32f4xx.h>
 #include <stm32f4xx_hal.h>
+#include <stm32f4xx_hal_def.h>
 #include <stm32f4xx_hal_i2c.h>
 #include <stm32f4xx_hal_i2s.h>
 #include <stm32f4xx_hal_i2s_ex.h>
 #include <stm32f4xx_hal_sai.h>
 
-#include <cstdint>
-#include <cstring>
-
-#include "drv/wm8960.hpp"
-#include "errors.hpp"
-#include "logging.hpp"
-#include "stm32f4xx_hal_def.h"
+#include "mk0/errors.h"
+#include "mk0/logging.h"
 
 namespace deloop {
 
@@ -95,12 +94,40 @@ Error WM8960::resetToDefaults(void) {
     return error;
   }
 
+  error = writeRegister(WM8960_REG_ADDR_ADCL_INPUT_PATH,
+                        WM8960_REG_FLAG_ADCL_INPUT_PATH_LMN1_ON |
+                            WM8960_REG_FLAG_ADCL_INPUT_PATH_LMIC2B_ON);
+  if (error != Error::kOk) {
+    DELOOP_LOG_ERROR("[WM8960] Failed to configure left input path: %d", error);
+    return error;
+  }
+
+  error = writeRegister(WM8960_REG_ADDR_ADCR_INPUT_PATH,
+                        WM8960_REG_FLAG_ADCR_INPUT_PATH_RMN1_ON |
+                            WM8960_REG_FLAG_ADCR_INPUT_PATH_RMIC2B_ON);
+  if (error != Error::kOk) {
+    DELOOP_LOG_ERROR("[WM8960] Failed to configure right input path: %d",
+                     error);
+    return error;
+  }
+
+  error = writeRegister(WM8960_REG_ADDR_LEFT_INPUT_VOL,
+                        WM8960_REG_FLAG_RIGHT_INPUT_VOL_IPVU |
+                            WM8960_REG_FLAG_LEFT_INPUT_VOL_LINMUTE_OFF |
+                            WM8960_REG_FLAG_LEFT_INPUT_VOL_LINVOL(0.0f));
+  error = writeRegister(WM8960_REG_ADDR_RIGHT_INPUT_VOL,
+                        WM8960_REG_FLAG_RIGHT_INPUT_VOL_IPVU |
+                            WM8960_REG_FLAG_RIGHT_INPUT_VOL_RINMUTE_OFF |
+                            WM8960_REG_FLAG_RIGHT_INPUT_VOL_RINVOL(0.0f));
+
   error = writeRegister(WM8960_REG_ADDR_LEFT_OUT_MIX,
                         WM8960_REG_FLAG_LEFT_OUT_MIX_LD2LO_ON);
   if (error != Error::kOk) {
     DELOOP_LOG_ERROR("[WM8960] Failed to configure left out mix: %d", error);
     return error;
   }
+
+  // writeRegister(0x09, 1);
 
   error = writeRegister(WM8960_REG_ADDR_RIGHT_OUT_MIX,
                         WM8960_REG_FLAG_RIGHT_OUT_MIX_RD2RO_ON);

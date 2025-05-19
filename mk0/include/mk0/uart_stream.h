@@ -9,7 +9,7 @@
 #include <queue.h>
 
 #include "command.pb.h"
-#include "errors.hpp"
+#include "mk0/errors.h"
 
 namespace deloop {
 namespace uart_stream {

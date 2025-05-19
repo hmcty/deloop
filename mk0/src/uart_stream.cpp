@@ -1,4 +1,4 @@
-#include "uart_stream.hpp"
+#include "mk0/uart_stream.h"
 
 #include <cstring>
 #include <pb_decode.h>
@@ -10,9 +10,9 @@
 #include <queue.h>
 
 #include "command.pb.h"
-#include "errors.hpp"
 #include "log.pb.h"
-#include "logging.hpp"
+#include "mk0/errors.h"
+#include "mk0/logging.h"
 #include "stream.pb.h"
 
 const size_t kStreamQueueSize = 8;

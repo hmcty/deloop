@@ -189,4 +189,3 @@ void SystemCoreClockUpdate(void) {
   /* HCLK frequency */
   SystemCoreClock >>= tmp;
 }
-

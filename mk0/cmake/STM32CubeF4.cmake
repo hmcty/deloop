@@ -1,6 +1,6 @@
 # STM32CubeF4
 
-macro(add_STM32CubeF4_library TARGET_NAME SOURCE_DIR CONFIG_DIR)
+macro(add_STM32CubeF4_library TARGET_NAME MCU_TARGET SOURCE_DIR CONFIG_DIR)
   add_library(${TARGET_NAME}_interface INTERFACE)
   target_include_directories(${TARGET_NAME}_interface
   INTERFACE
@@ -8,14 +8,15 @@ macro(add_STM32CubeF4_library TARGET_NAME SOURCE_DIR CONFIG_DIR)
     ${SOURCE_DIR}/Drivers/CMSIS/Device/ST/STM32F4xx/Include
     ${SOURCE_DIR}/Drivers/CMSIS/Include
     ${SOURCE_DIR}/Drivers/STM32F4xx_HAL_Driver/Inc
-    ${SOURCE_DIR}/Drivers/STM32F4xx_HAL_Driver/IncLegacy
+    ${SOURCE_DIR}/Drivers/STM32F4xx_HAL_Driver/Inc/Legacy
   )
   target_compile_definitions(${TARGET_NAME}_interface
   INTERFACE
     STM32F4xx
-    STM32F446xx
+    ${MCU_TARGET}
     USE_HAL_DRIVER
   )
+
 
   add_library(${TARGET_NAME} STATIC)
   target_sources(${TARGET_NAME}
@@ -40,8 +41,5 @@ macro(add_STM32CubeF4_library TARGET_NAME SOURCE_DIR CONFIG_DIR)
     ${SOURCE_DIR}/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_usart.c
     ${SOURCE_DIR}/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_wwdg.c
   )
-  target_link_libraries(${TARGET_NAME}
-  PUBLIC
-    ${TARGET_NAME}_interface
-  )
+  target_link_libraries(${TARGET_NAME} PUBLIC ${TARGET_NAME}_interface)
 endmacro()

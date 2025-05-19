@@ -5,11 +5,6 @@ PRIVATE
   fff
   GTest::gtest_main
   wm8960_stm32f4
-  stm32f4xx_hal_interface
-)
-target_include_directories(test_wm8960
-PRIVATE
-  ${CMAKE_SOURCE_DIR}/src/config
 )
 add_test(NAME test_wm8960 COMMAND test_wm8960)
 

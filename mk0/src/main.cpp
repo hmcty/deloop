@@ -10,18 +10,18 @@
 #include <queue.h>
 #include <task.h>
 
-#include "audio/routines/sine.hpp"
-#include "audio/scheduler.hpp"
-#include "audio/stream.hpp"
 #include "command.pb.h"
-#include "drv/wm8960.hpp"
-#include "logging.hpp"
-#include "uart_stream.hpp"
+#include "mk0/audio/plugins.h"
+#include "mk0/audio/scheduler.h"
+#include "mk0/audio/stream.h"
+#include "mk0/drv/wm8960.h"
+#include "mk0/logging.h"
+#include "mk0/uart_stream.h"
 
 static void ConfigureSystemClock(void);
 static void ConfigureHALPeripherals(void);
 static void ErrorHandler(void);
-static void CommandHandler(const Command &cmd);
+static void CommandHandler(const Command &cmd, deloop::WM8960 &wm8960);
 static void CoreLoopTask(void *pvParameters);
 
 const size_t task_stack_size = configMINIMAL_STACK_SIZE * 10;
@@ -31,7 +31,7 @@ static StackType_t task_stack[task_stack_size];
 static bool recording = false;
 static bool playback = false;
 
-UART_HandleTypeDef uart2_handle = {0};
+UART_HandleTypeDef uart2_handle;
 
 int main(void) {
   // STM32F4xx HAL library initialization:
@@ -155,7 +155,7 @@ static void ErrorHandler(void) {
   }
 }
 
-static void CommandHandler(deloop::WM8960 &wm8960, const Command &cmd) {
+static void CommandHandler(const Command &cmd, deloop::WM8960 &wm8960) {
   // TODO: Breakout larger requests into separate functions.
   switch (cmd.which_request) {
   case Command_reset_tag:
@@ -283,7 +283,8 @@ static void CoreLoopTask(void *pvParameters) {
     return;
   }
 
-  err = deloop::audio_scheduler::registerCallback(tx_sine);
+  err = deloop::audio_scheduler::registerCallback(deloop::audio::plugins::echo);
+  // err = deloop::audio_scheduler::registerCallback(tx_sine);
   if (err != deloop::Error::kOk) {
     DELOOP_LOG_ERROR("[AUDIO_STREAM] Failed to register audio callback: %d",
                      err);
@@ -307,7 +308,7 @@ static void CoreLoopTask(void *pvParameters) {
 
   while (1) {
     if (xQueueReceive(cmd_queue, &cmd, portMAX_DELAY) == pdTRUE) {
-      CommandHandler(wm8960, cmd);
+      CommandHandler(cmd, wm8960);
     }
   }
 }

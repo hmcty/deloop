@@ -4,7 +4,7 @@
 #include <functional>
 #include <stm32f4xx_hal.h>
 
-#include "errors.hpp"
+#include "mk0/errors.h"
 
 namespace deloop {
 namespace audio_stream {

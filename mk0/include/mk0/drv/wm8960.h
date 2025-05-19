@@ -1,9 +1,11 @@
 #pragma once
 
 #include <cstdint>
+
+#include <stm32f4xx.h>
 #include <stm32f4xx_hal_i2c.h>
 
-#include "errors.hpp"
+#include "mk0/errors.h"
 
 #define WM8960_I2C_ADDR (0x34) // Pg 62 of datasheet
 
@@ -11,18 +13,60 @@
 // WM8960 Register Addresses
 // ---------------------------
 
+#define WM8960_REG_ADDR_LEFT_INPUT_VOL (uint8_t)(0x00)
+#define WM8960_REG_ADDR_RIGHT_INPUT_VOL (uint8_t)(0x01)
 #define WM8960_REG_ADDR_ADC_DAC_CTL_1 (uint8_t)(0x05)
-#define WM8960_REG_ADDR_LEFT_INPUT_VOL (uint8_t)(0x0A)
-#define WM8960_REG_ADDR_RIGHT_INPUT_VOL (uint8_t)(0x0B)
+#define WM8960_REG_ADDR_LEFT_DAC_VOL (uint8_t)(0x0A)
+#define WM8960_REG_ADDR_RIGHT_DAC_VOL (uint8_t)(0x0B)
 #define WM8960_REG_ADDR_RESET (uint8_t)(0x0F)
 #define WM8960_REG_ADDR_POWER_MGMT_1 (uint8_t)(0x19)
 #define WM8960_REG_ADDR_POWER_MGMT_2 (uint8_t)(0x1A)
+#define WM8960_REG_ADDR_ADCL_INPUT_PATH (uint8_t)(0x20)
+#define WM8960_REG_ADDR_ADCR_INPUT_PATH (uint8_t)(0x21)
 #define WM8960_REG_ADDR_LEFT_OUT_MIX (uint8_t)(0x22)
 #define WM8960_REG_ADDR_RIGHT_OUT_MIX (uint8_t)(0x25)
 #define WM8960_REG_ADDR_LEFT_SPKR_VOL (uint8_t)(0x28)
 #define WM8960_REG_ADDR_RIGHT_SPKR_VOL (uint8_t)(0x29)
 #define WM8960_REG_ADDR_POWER_MGMT_3 (uint8_t)(0x2F)
 #define WM8960_REG_ADDR_CLASS_D_CTL_1 (uint8_t)(0x31)
+
+// -----------------------
+// Left Input Volume Flags
+// -----------------------
+
+// IPVU: Input PGA volume update.
+#define WM8960_REG_FLAG_LEFT_INPUT_VOL_IPVU (uint16_t)(0b1 << 8)
+
+// LINMUTE: Left input PGA analogue mute.
+#define WM8960_REG_FLAG_LEFT_INPUT_VOL_LINMUTE_OFF (uint16_t)(0b0 << 7)
+#define WM8960_REG_FLAG_LEFT_INPUT_VOL_LINMUTE_ON (uint16_t)(0b1 << 7)
+
+// LINVOL: Left input PGA volume control (+30dB to -17.25dB in 0.75dB steps).
+#define WM8960_REG_FLAG_LEFT_INPUT_VOL_LINVOL_MIN_dB (float)(-17.25)
+#define WM8960_REG_FLAG_LEFT_INPUT_VOL_LINVOL_MAX_dB (float)(30.00)
+#define WM8960_REG_FLAG_LEFT_INPUT_VOL_LINVOL_MUTE (uint16_t)(0b000000)
+#define WM8960_REG_FLAG_LEFT_INPUT_VOL_LINVOL(X)                               \
+  (uint16_t)(std::max((0b000000 + ((uint16_t)(((X) - (-17.25f)) / 0.75f))),    \
+                      0b111111))
+
+// ------------------------
+// Right Input Volume Flags
+// ------------------------
+
+// IPVU: Input PGA volume update.
+#define WM8960_REG_FLAG_RIGHT_INPUT_VOL_IPVU (uint16_t)(0b1 << 8)
+
+// RINMUTE: Right input PGA analogue mute.
+#define WM8960_REG_FLAG_RIGHT_INPUT_VOL_RINMUTE_OFF (uint16_t)(0b0 << 7)
+#define WM8960_REG_FLAG_RIGHT_INPUT_VOL_RINMUTE_ON (uint16_t)(0b1 << 7)
+
+// RINVOL: Right input PGA volume control (+30dB to -17.25dB in 0.75dB steps).
+#define WM8960_REG_FLAG_RIGHT_INPUT_VOL_RINVOL_MIN_dB (float)(-17.25)
+#define WM8960_REG_FLAG_RIGHT_INPUT_VOL_RINVOL_MAX_dB (float)(30.00)
+#define WM8960_REG_FLAG_RIGHT_INPUT_VOL_RINVOL_MUTE (uint16_t)(0b000000)
+#define WM8960_REG_FLAG_RIGHT_INPUT_VOL_RINVOL(X)                              \
+  (uint16_t)(std::max((0b000000 + ((uint16_t)(((X) - (-17.25f)) / 0.75f))),    \
+                      0b111111))
 
 // -------------------------
 // ADC/DAC Control (1) Flags
@@ -103,6 +147,46 @@
 // PLL_EN: Enable/disable PLL.
 #define WM8960_REG_FLAG_POWER_MGMT_2_PLL_EN_OFF (uint16_t)(0b0 << 0)
 #define WM8960_REG_FLAG_POWER_MGMT_2_PLL_EN_ON (uint16_t)(0b1 << 0)
+
+// ---------------------
+// ADCL Input Path Flags
+// ---------------------
+
+// LMN1: Connect LINPUT1 to inverting input of left input PGA.
+#define WM8960_REG_FLAG_ADCL_INPUT_PATH_LMN1_OFF (uint16_t)(0b0 << 8)
+#define WM8960_REG_FLAG_ADCL_INPUT_PATH_LMN1_ON (uint16_t)(0b1 << 8)
+
+// LMP3: Connect LINPUT3 to non-inverting input of left input PGA.
+#define WM8960_REG_FLAG_ADCL_INPUT_PATH_LMP3_OFF (uint16_t)(0b0 << 7)
+#define WM8960_REG_FLAG_ADCL_INPUT_PATH_LMP3_ON (uint16_t)(0b1 << 7)
+
+// LMP2: Connect LINPUT2 to non-inverting input of left input PGA.
+#define WM8960_REG_FLAG_ADCL_INPUT_PATH_LMP2_OFF (uint16_t)(0b0 << 6)
+#define WM8960_REG_FLAG_ADCL_INPUT_PATH_LMP2_ON (uint16_t)(0b1 << 6)
+
+// LMIC2B: Connect left input PGA to left input boost mixer.
+#define WM8960_REG_FLAG_ADCL_INPUT_PATH_LMIC2B_OFF (uint16_t)(0b0 << 3)
+#define WM8960_REG_FLAG_ADCL_INPUT_PATH_LMIC2B_ON (uint16_t)(0b1 << 3)
+
+// ---------------------
+// ADCR Input Path Flags
+// ---------------------
+
+// RMN1: Connect RINPUT1 to inverting input of right input PGA.
+#define WM8960_REG_FLAG_ADCR_INPUT_PATH_RMN1_OFF (uint16_t)(0b0 << 8)
+#define WM8960_REG_FLAG_ADCR_INPUT_PATH_RMN1_ON (uint16_t)(0b1 << 8)
+
+// RMP3: Connect RINPUT3 to non-inverting input of right input PGA.
+#define WM8960_REG_FLAG_ADCR_INPUT_PATH_RMP3_OFF (uint16_t)(0b0 << 7)
+#define WM8960_REG_FLAG_ADCR_INPUT_PATH_RMP3_ON (uint16_t)(0b1 << 7)
+
+// RMP2: Connect RINPUT2 to non-inverting input of right input PGA.
+#define WM8960_REG_FLAG_ADCR_INPUT_PATH_RMP2_OFF (uint16_t)(0b0 << 6)
+#define WM8960_REG_FLAG_ADCR_INPUT_PATH_RMP2_ON (uint16_t)(0b1 << 6)
+
+// RMIC2B: Connect right input PGA to right input boost mixer.
+#define WM8960_REG_FLAG_ADCR_INPUT_PATH_RMIC2B_OFF (uint16_t)(0b0 << 3)
+#define WM8960_REG_FLAG_ADCR_INPUT_PATH_RMIC2B_ON (uint16_t)(0b1 << 3)
 
 // ------------------
 // Left Out Mix Flags

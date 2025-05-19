@@ -1,10 +1,10 @@
-#include "audio/routines/sine.hpp"
+#include "mk0/audio/plugins.h"
 
 #include <array>
 #include <cmath>
 #include <cstdint>
 
-#include "errors.hpp"
+#include "mk0/errors.h"
 
 constexpr int SINE_TABLE_SIZE = 8096; // Size of the sine table
 
@@ -34,7 +34,7 @@ deloop::Error tx_sine(uint32_t num_frames, int32_t *tx, int32_t *rx) {
 
   // Fill the tx buffer with sine wave samples
   static uint32_t j = 0;
-  for (int i = 0; i < (num_frames / 2); i++) {
+  for (uint32_t i = 0; i < (num_frames / 2); i++) {
     int32_t sample = SINE_TABLE[j++ % SINE_TABLE_SIZE];
     tx[i] = sample;
     tx[i + 1] = sample;

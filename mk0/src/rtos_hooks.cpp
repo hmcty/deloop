@@ -1,8 +1,8 @@
-#include "FreeRTOS.h"
-#include "FreeRTOSConfig.h"
-#include "task.h"
+#include <FreeRTOS.h> // Must appear before other FreeRTOS includes
+#include <FreeRTOSConfig.h>
+#include <task.h>
 
-#include "stm32f4xx_hal.h"
+#include <stm32f4xx_hal.h>
 
 // Forward declaration
 void vAssertCalled(const char *const pcFileName, unsigned long ulLine);

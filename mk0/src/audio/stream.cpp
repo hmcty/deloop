@@ -1,24 +1,26 @@
-#include "audio/stream.hpp"
+#include "mk0/audio/stream.h"
 
 #include <stm32f4xx_hal.h>
+#include <stm32f4xx_hal_def.h>
 #include <stm32f4xx_hal_dma.h>
 #include <stm32f4xx_hal_dma_ex.h>
 #include <stm32f4xx_hal_sai.h>
 
 #include <FreeRTOS.h> // Must appear before other FreeRTOS includes
+#include <portmacro.h>
 #include <task.h>
 
-#include "audio/scheduler.hpp"
-#include "board/stm32f4xx_it.h"
-#include "errors.hpp"
-#include "logging.hpp"
-#include "portmacro.h"
-#include "stm32f4xx_hal_def.h"
+#include "mk0/audio/scheduler.h"
+#include "mk0/errors.h"
+#include "mk0/logging.h"
+
+// @todo: Move to a common header.
+#include "stm32f4xx_it.h"
 
 using namespace deloop;
 
 const size_t kTaskStackSize = configMINIMAL_STACK_SIZE * 5;
-const uint16_t kFrameSize = 64;
+const uint16_t kFrameSize = 128;
 
 const UBaseType_t kRxNotifIndex = 0;
 const UBaseType_t kTxNotifIndex = 1;
@@ -32,7 +34,7 @@ static struct {
   TaskHandle_t audio_stream_task;
   StaticTask_t task_buffer;
   StackType_t task_stack[kTaskStackSize];
-} state_ = {0};
+} state_;
 
 static Error convertStatus(HAL_StatusTypeDef status);
 static HAL_StatusTypeDef enableRxDMA(SAI_HandleTypeDef *sai_handle,
@@ -266,6 +268,7 @@ static void audioStreamLoop(void *args) {
 }
 
 static void rxMem0XferComplete(DMA_HandleTypeDef *dma_handle) {
+  (void)dma_handle;
   if (!state_.initialized) {
     // TODO: Throw an error
     return;
@@ -278,6 +281,7 @@ static void rxMem0XferComplete(DMA_HandleTypeDef *dma_handle) {
 }
 
 static void rxMem1XferComplete(DMA_HandleTypeDef *dma_handle) {
+  (void)dma_handle;
   if (!state_.initialized) {
     // TODO: Throw an error
     return;
@@ -290,6 +294,7 @@ static void rxMem1XferComplete(DMA_HandleTypeDef *dma_handle) {
 }
 
 static void txMem0XferComplete(DMA_HandleTypeDef *dma_handle) {
+  (void)dma_handle;
   if (!state_.initialized) {
     // TODO: Throw an error
     return;
@@ -302,6 +307,7 @@ static void txMem0XferComplete(DMA_HandleTypeDef *dma_handle) {
 }
 
 static void txMem1XferComplete(DMA_HandleTypeDef *dma_handle) {
+  (void)dma_handle;
   if (!state_.initialized) {
     // TODO: Throw an error
     return;
