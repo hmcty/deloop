@@ -12,13 +12,34 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # MCU OPTIONS
-set(MCU_TARGET "STM32F446" CACHE STRING "Target platform for compilation")
+set(MCU_TARGET "STM32H750" CACHE STRING "Target platform for compilation")
 set_property(CACHE MCU_TARGET PROPERTY STRINGS
-  STM32F4XX
+  STM32F446
+  STM32H750
   HOST  # For unit tests
 )
 
-if (MCU_TARGET STREQUAL "STM32F446")
+if (MCU_TARGET STREQUAL "STM32H750")
+  set(MCU_OPTIONS
+    -mcpu=cortex-m7
+    -mthumb
+    -mfloat-abi=hard
+    -mfpu=fpv5-d16
+  )
+  set(MCU_LINKER_OPTIONS
+    -specs=nano.specs
+    -T${CMAKE_SOURCE_DIR}/targets/stm32h7xx/stm32h750_flash.ld
+  )
+  set(MCU_HAL_PATH ${CMAKE_SOURCE_DIR}/targets/stm32h7xx)
+  set(MCU_HAL_SRCS
+    ${MCU_HAL_PATH}/startup_stm32h750xx.s
+    ${MCU_HAL_PATH}/stm32h7xx_hal_msp.cpp
+    ${MCU_HAL_PATH}/stm32h7xx_it.cpp
+    ${MCU_HAL_PATH}/system_stm32h7xx.cpp
+  )
+  set(MCU_HAL_TARGETS stm32h7xx_hal)
+  set(FREERTOS_PORT GCC_ARM_CM7)
+elseif (MCU_TARGET STREQUAL "STM32F446")
   set(MCU_OPTIONS
     -mcpu=cortex-m4
     -mthumb
@@ -27,15 +48,16 @@ if (MCU_TARGET STREQUAL "STM32F446")
   )
   set(MCU_LINKER_OPTIONS
     -specs=nano.specs
-    -T${CMAKE_SOURCE_DIR}/targets/stm32f4/stm32f446_flash.ld
+    -T${CMAKE_SOURCE_DIR}/targets/stm32f4xx/stm32f446_flash.ld
   )
-  set(MCU_HAL_PATH ${CMAKE_SOURCE_DIR}/targets/stm32f4)
+  set(MCU_HAL_PATH ${CMAKE_SOURCE_DIR}/targets/stm32f4xx)
   set(MCU_HAL_SRCS
     ${MCU_HAL_PATH}/startup_stm32f446xx.s
     ${MCU_HAL_PATH}/stm32f4xx_hal_msp.cpp
     ${MCU_HAL_PATH}/stm32f4xx_it.cpp
     ${MCU_HAL_PATH}/system_stm32f4xx.cpp
   )
+  set(MCU_HAL_TARGETS stm32f4xx_hal)
   set(FREERTOS_PORT GCC_ARM_CM4F)
 elseif (MCU_TARGET STREQUAL "HOST")
   set(MCU_OPTIONS "")
@@ -44,6 +66,7 @@ elseif (MCU_TARGET STREQUAL "HOST")
   set(MCU_HAL_SRCS
     ${MCU_HAL_PATH}/stm32_hal_dummy.cpp
   )
+  set(MCU_HAL_TARGETS fff stm32f4xx_hal_interface)
   set(FREERTOS_PORT GCC_POSIX)
 else()
   message(FATAL_ERROR "Unsupported MCU target: ${MCU_TARGET}")
@@ -105,7 +128,15 @@ include(cmake/STM32CubeF4.cmake)
 add_STM32CubeF4_library(stm32f4xx_hal
   STM32F446xx
   ${CMAKE_SOURCE_DIR}/external/STM32CubeF4
-  ${CMAKE_SOURCE_DIR}/targets/stm32f4
+  ${CMAKE_SOURCE_DIR}/targets/stm32f4xx
+)
+
+# STM32CubeH7
+include(cmake/STM32CubeH7.cmake)
+add_STM32CubeH7_library(stm32h7xx_hal
+  STM32H750xx
+  ${CMAKE_SOURCE_DIR}/external/STM32CubeH7
+  ${CMAKE_SOURCE_DIR}/targets/stm32h7xx
 )
 
 # nanopb
@@ -133,18 +164,17 @@ COMMAND
 # HAL LIBRARY
 add_library(hal_library STATIC ${MCU_HAL_SRCS})
 target_compile_options(hal_library PRIVATE ${INTERNAL_OPTIONS})
-target_include_directories(hal_library PUBLIC ${MCU_HAL_PATH})
-if (MCU_TARGET STREQUAL "STM32F446")
-  target_link_libraries(hal_library PUBLIC stm32f4xx_hal)
-elseif (MCU_TARGET STREQUAL "HOST")
-  target_link_libraries(hal_library PUBLIC fff stm32f4xx_hal_interface)
-endif()
+target_include_directories(hal_library
+PUBLIC
+  ${CMAKE_SOURCE_DIR}/targets
+  ${MCU_HAL_PATH})
+target_link_libraries(hal_library PUBLIC ${MCU_HAL_TARGETS})
 
 # DRIVERS
-add_library(wm8960_stm32f4 STATIC src/drv/wm8960_stm32f4.cpp)
-target_compile_options(wm8960_stm32f4 PRIVATE ${INTERNAL_OPTIONS})
-target_link_libraries(wm8960_stm32f4 PUBLIC hal_library)
-target_include_directories(wm8960_stm32f4 PUBLIC ${CMAKE_SOURCE_DIR}/include/)
+add_library(wm8960_stm32 STATIC src/drv/wm8960_stm32.cpp)
+target_compile_options(wm8960_stm32 PRIVATE ${INTERNAL_OPTIONS})
+target_link_libraries(wm8960_stm32 PUBLIC hal_library)
+target_include_directories(wm8960_stm32 PUBLIC ${CMAKE_SOURCE_DIR}/include/)
 
 # APPLICATION
 set(EXECUTABLE ${PROJECT_NAME}.elf)
@@ -168,7 +198,7 @@ PUBLIC
   nanopb
   freertos_kernel
   freertos_config
-  wm8960_stm32f4
+  wm8960_stm32
   hal_library
 )
 
@@ -198,7 +228,7 @@ COMMAND
   --output ${CMAKE_BINARY_DIR}/python/log_table.json
   # NOTE: This must match the logging macros described in `src/logging.hpp`.
   --macro ${LOGGING_MACROS}
-  --source_files ${SOURCES} src/drv/wm8960_stm32f4.cpp
+  --source_files ${SOURCES} src/drv/wm8960_stm32.cpp
   --source_version ${PROJECT_VERSION}
 WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
 )

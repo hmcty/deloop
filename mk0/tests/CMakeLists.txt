@@ -4,7 +4,7 @@ target_link_libraries(test_wm8960
 PRIVATE
   fff
   GTest::gtest_main
-  wm8960_stm32f4
+  wm8960_stm32
 )
 add_test(NAME test_wm8960 COMMAND test_wm8960)
 

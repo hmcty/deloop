@@ -167,7 +167,7 @@ static void CommandHandler(const Command &cmd, deloop::WM8960 &wm8960) {
     if (cmd.request.configure_recording.enable != recording) {
       auto error = wm8960.stopRecording();
       if (error != deloop::Error::kOk) {
-        DELOOP_LOG_ERROR_FROM_ISR("Failed to stop recording: %d", error);
+        DELOOP_LOG_ERROR("Failed to stop recording: %d", error);
         deloop::uart_stream::sendCommandResponse(CommandResponse{
             .cmd_id = cmd.cmd_id,
             .status = CommandStatus_ERR_INTERNAL,
@@ -179,7 +179,7 @@ static void CommandHandler(const Command &cmd, deloop::WM8960 &wm8960) {
       if (recording) {
         error = wm8960.startRecording();
         if (error != deloop::Error::kOk) {
-          DELOOP_LOG_ERROR_FROM_ISR("Failed to start recording: %d", error);
+          DELOOP_LOG_ERROR("Failed to start recording: %d", error);
           deloop::uart_stream::sendCommandResponse(CommandResponse{
               .cmd_id = cmd.cmd_id,
               .status = CommandStatus_ERR_INTERNAL,
@@ -188,7 +188,7 @@ static void CommandHandler(const Command &cmd, deloop::WM8960 &wm8960) {
           break;
         }
 
-        DELOOP_LOG_INFO_FROM_ISR("Successfully started recording");
+        DELOOP_LOG_INFO("Successfully started recording");
       }
 
       deloop::uart_stream::sendCommandResponse(CommandResponse{
@@ -211,7 +211,7 @@ static void CommandHandler(const Command &cmd, deloop::WM8960 &wm8960) {
 
       auto error = wm8960.setVolume(volume);
       if (error != deloop::Error::kOk) {
-        DELOOP_LOG_ERROR_FROM_ISR("Failed to set volume: %d", error);
+        DELOOP_LOG_ERROR("Failed to set volume: %d", error);
         deloop::uart_stream::sendCommandResponse(CommandResponse{
             .cmd_id = cmd.cmd_id,
             .status = CommandStatus_ERR_INTERNAL,
@@ -219,14 +219,14 @@ static void CommandHandler(const Command &cmd, deloop::WM8960 &wm8960) {
         break;
       }
 
-      DELOOP_LOG_INFO_FROM_ISR("Volume set to %d%%", (int)(volume * 100));
+      DELOOP_LOG_INFO("Volume set to %d%%", (int)(volume * 100));
     }
 
     // Handle playback state change if needed
     if (config_request.has_enable && config_request.enable != playback) {
       auto error = wm8960.stopPlayback();
       if (error != deloop::Error::kOk) {
-        DELOOP_LOG_ERROR_FROM_ISR("Failed to stop playback: %d", error);
+        DELOOP_LOG_ERROR("Failed to stop playback: %d", error);
         deloop::uart_stream::sendCommandResponse(CommandResponse{
             .cmd_id = cmd.cmd_id,
             .status = CommandStatus_ERR_INTERNAL,
@@ -241,7 +241,7 @@ static void CommandHandler(const Command &cmd, deloop::WM8960 &wm8960) {
         //     deloop::WM8960::StartPlayback((uint8_t *)audio_buf,
         //     kAudioBufSize);
         if (error != deloop::Error::kOk) {
-          DELOOP_LOG_ERROR_FROM_ISR("Failed to start playback: %d", error);
+          DELOOP_LOG_ERROR("Failed to start playback: %d", error);
           deloop::uart_stream::sendCommandResponse(CommandResponse{
               .cmd_id = cmd.cmd_id,
               .status = CommandStatus_ERR_INTERNAL,
@@ -250,7 +250,7 @@ static void CommandHandler(const Command &cmd, deloop::WM8960 &wm8960) {
           break;
         }
 
-        DELOOP_LOG_INFO_FROM_ISR("Successfully started playback");
+        DELOOP_LOG_INFO("Successfully started playback");
       }
     }
 
@@ -260,7 +260,7 @@ static void CommandHandler(const Command &cmd, deloop::WM8960 &wm8960) {
     });
   } break;
   default:
-    DELOOP_LOG_ERROR_FROM_ISR("Unknown command received");
+    DELOOP_LOG_ERROR("Unknown command received");
     break;
   }
 }

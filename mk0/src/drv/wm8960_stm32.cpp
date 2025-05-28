@@ -1,13 +1,6 @@
 #include "mk0/drv/wm8960.h"
 
-// STM32 includes - order is important
-#include <stm32f4xx.h>
-#include <stm32f4xx_hal.h>
-#include <stm32f4xx_hal_def.h>
-#include <stm32f4xx_hal_i2c.h>
-#include <stm32f4xx_hal_i2s.h>
-#include <stm32f4xx_hal_i2s_ex.h>
-#include <stm32f4xx_hal_sai.h>
+#include "stm32_hal.h"
 
 #include "mk0/errors.h"
 #include "mk0/logging.h"

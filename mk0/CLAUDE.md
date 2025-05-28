@@ -8,6 +8,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Build SDK: `nix-build -A sdk`
 - Run all tests: `nix-build -A tests`
 
+On any code change, all three commands should be run and
+succeed.
+
 ## Code Style
 
 - C++23 standard

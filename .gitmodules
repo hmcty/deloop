@@ -13,3 +13,6 @@
 [submodule "mk0/external/googletest"]
 	path = mk0/external/googletest
 	url = git@github.com:google/googletest.git
+[submodule "mk0/external/STM32CubeH7"]
+	path = mk0/external/STM32CubeH7
+	url = git@github.com:STMicroelectronics/STM32CubeH7.git
