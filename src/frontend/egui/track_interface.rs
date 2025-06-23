@@ -112,10 +112,10 @@ impl TrackInterface {
             .inner_margin(egui::vec2(available_width * 0.05, 10.0))
             .outer_margin(egui::vec2(0.0, 0.0))
             .rounding(egui::Rounding {
-                nw: 10.0,
-                ne: 10.0,
-                sw: 0.0,
-                se: 0.0,
+                nw: 10,
+                ne: 10,
+                sw: 0,
+                se: 0,
             })
             .show(ui, |ui| {
                 Frame::canvas(ui.style())

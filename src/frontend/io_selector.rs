@@ -13,6 +13,7 @@ pub struct SelectedIO {
 }
 
 impl SelectedIO {
+    #[allow(dead_code)]
     pub fn toggle_audio_source(&mut self, client: &mut deloop::Client, audio_source: &str) {
         info!(
             "User toggled subscription to audio source: {:?}",
@@ -27,6 +28,7 @@ impl SelectedIO {
         }
     }
 
+    #[allow(dead_code)]
     pub fn select_audio_sink(&mut self, client: &mut deloop::Client, audio_sink: Option<String>) {
         if self.audio_sink == audio_sink {
             return;
@@ -49,6 +51,7 @@ impl SelectedIO {
         }
     }
 
+    #[allow(dead_code)]
     pub fn select_control_source(
         &mut self,
         client: &mut deloop::Client,

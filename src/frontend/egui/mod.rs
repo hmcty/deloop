@@ -1,8 +1,7 @@
 mod control_panel;
-mod io_selector;
 mod track_interface;
 
-use control_panel::ControlPanel;
+use crate::frontend::egui::control_panel::ControlPanel;
 
 pub fn run() -> eframe::Result {
     let options = eframe::NativeOptions::default();

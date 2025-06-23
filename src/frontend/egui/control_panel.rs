@@ -5,8 +5,8 @@ use std::collections::HashSet;
 use crate::deloop;
 use crate::util;
 
-use crate::gui::io_selector::SelectedIO;
-use crate::gui::track_interface::TrackInterface;
+use crate::frontend::egui::track_interface::TrackInterface;
+use crate::frontend::io_selector::SelectedIO;
 
 pub struct ControlPanel {
     client: deloop::Client,
