@@ -8,13 +8,5 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     {
         egui::run()?;
     }
-
-    #[cfg(not(feature = "egui-frontend"))]
-    {
-        eprintln!(
-            "Egui frontend is not enabled. Please enable it with the 'egui-frontend' feature."
-        );
-    }
-
     Ok(())
 }
