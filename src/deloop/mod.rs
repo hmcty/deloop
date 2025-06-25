@@ -114,6 +114,7 @@ impl Client {
         }
     }
 
+    /// Force track to overdub existing audio.
     pub fn enqueue_overdub(&self, track_id: TrackId) -> Result<(), Error> {
         self.command_tx
             .send(TrackCommand::EnqueueOverdub(track_id))
@@ -153,7 +154,7 @@ impl Client {
         }
     }
 
-    /// Configures focus on a track.
+    /// Switches focus to a specified track.
     pub fn focus_on_track(&mut self, track_id: TrackId) -> Result<(), Error> {
         self.command_tx
             .send(TrackCommand::FocusOnTrack(track_id))

@@ -56,7 +56,7 @@ impl GlobalCounter {
         self.counters[ctr_id as usize].len
     }
 
-    /// Returns the current tick of a track.
+    /// Returns the 
     pub fn absolute(&self, ctr_id: TrackId) -> u64 {
         self.counters[ctr_id as usize].cnt
     }
@@ -78,6 +78,6 @@ impl GlobalCounter {
             return 0;
         }
 
-        (counter.len - (counter.cnt + 1 % counter.len)) + counter.cnt + 1
+        (counter.len - (counter.cnt % counter.len)) + counter.cnt + 1
     }
 }

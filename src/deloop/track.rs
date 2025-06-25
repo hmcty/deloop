@@ -200,7 +200,7 @@ impl Track {
         });
     }
 
-    /// Updates the current state.
+    /// Sets current state within the FSM.
     pub fn enter_state(&mut self, state: StateType) {
         self.last_state = self.state;
         self.last_state_change = std::time::Instant::now();
