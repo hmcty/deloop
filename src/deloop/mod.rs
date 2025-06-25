@@ -61,8 +61,13 @@ impl Default for Client {
     ///
     /// Opens a connection to the jack server and begins processing audio.
     fn default() -> Self {
-        let (jack_client, _status) =
-            jack::Client::new("deloop", jack::ClientOptions::default()).unwrap();
+        Self::new("deloop", jack::ClientOptions::default())
+    }
+}
+
+impl Client {
+    pub fn new(name: &str, options: jack::ClientOptions) -> Self {
+        let (jack_client, _status) = jack::Client::new(name, options).unwrap();
 
         let (command_tx, command_rx) = channel::<TrackCommand>();
         let (info_tx, info_rx) = channel::<TrackInfo>();
@@ -80,9 +85,7 @@ impl Default for Client {
             response_rx,
         }
     }
-}
 
-impl Client {
     /// Fetches any available track updates.
     pub fn get_track_updates(&self) -> Vec<TrackInfo> {
         let mut updates = Vec::new();

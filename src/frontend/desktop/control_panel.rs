@@ -5,7 +5,7 @@ use std::collections::HashSet;
 use crate::deloop;
 use crate::util;
 
-use crate::frontend::egui::track_interface::TrackInterface;
+use crate::frontend::desktop::track_interface::TrackInterface;
 use crate::frontend::io_selector::SelectedIO;
 
 pub struct ControlPanel {
@@ -120,7 +120,7 @@ impl eframe::App for ControlPanel {
         }
 
         egui::TopBottomPanel::top("Menu Bar")
-            .frame(egui::Frame::none().inner_margin(4.0))
+            .frame(egui::Frame::NONE.inner_margin(5.0))
             .show(ctx, |ui| {
                 if ui.button("Settings").clicked() {
                     self.is_settings_open = !self.is_settings_open;

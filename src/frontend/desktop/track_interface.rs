@@ -107,11 +107,11 @@ impl TrackInterface {
             bg_color = ui.visuals().widgets.active.bg_fill;
         }
 
-        Frame::none()
+        Frame::NONE
             .fill(bg_color)
             .inner_margin(egui::vec2(available_width * 0.05, 10.0))
             .outer_margin(egui::vec2(0.0, 0.0))
-            .rounding(egui::Rounding {
+            .corner_radius(egui::CornerRadius {
                 nw: 10,
                 ne: 10,
                 sw: 0,
@@ -189,11 +189,11 @@ impl TrackInterface {
     }
 
     pub fn show_controls(&mut self, ui: &mut egui::Ui, client: &mut deloop::Client) {
-        egui::Frame::none()
+        egui::Frame::NONE
             .fill(ui.visuals().widgets.active.bg_fill)
             .inner_margin(egui::vec2(10.0, 10.0))
             .show(ui, |ui| {
-                egui::Frame::none()
+                egui::Frame::NONE
                     .fill(ui.visuals().widgets.noninteractive.bg_fill)
                     .show(ui, |ui| {
                         ui.label(format!("Track {:?}", self.track_id));

@@ -13,3 +13,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     frontend::run()?;
     Ok(())
 }
+
+// GPIO16 GPIO12
+// https://github.com/cross-rs/cross
+// https://hackernoon.com/building-a-wireless-thermostat-in-rust-for-raspberry-pi-part-2
