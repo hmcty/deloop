@@ -83,9 +83,10 @@ impl TrackId {
 
 // TODO: Add unique indentifiers for commands
 pub enum TrackCommand {
-    AdvanceTrackState,
-    FocusOnTrack(TrackId),
-    EnqueueOverdub(TrackId),
+    AdvanceTrack(TrackId),
+    OverdubTrack(TrackId),
+    PauseTrack(TrackId),
+    ClearTrack(TrackId),
     ConfigureTrack(TrackId, track::Settings),
 }
 
@@ -96,7 +97,6 @@ pub enum TrackResponse {
 }
 
 pub enum TrackInfo {
-    FocusedTrackChanged(TrackId),
     StatusUpdate(TrackId, track::Status),
     CounterUpdate(counter::GlobalCounter),
     WaveformUpdate(TrackId, track::Status, Vec<f32>, Vec<f32>),
@@ -123,9 +123,6 @@ pub struct TrackManager {
     /// The tracks being managed.
     tracks: [track::Track; TrackId::NUM_TRACKS],
 
-    /// The track in focus, where incoming data is routed.
-    focused_track_id: TrackId,
-
     // Latency of the most recent audio processing loop.
     prev_processing_latency: Duration,
 }
@@ -151,7 +148,6 @@ impl TrackManager {
                 track::Track::new(TrackId::C),
                 track::Track::new(TrackId::D),
             ],
-            focused_track_id: TrackId::A,
             prev_processing_latency: Duration::from_secs(0),
         }
     }
@@ -171,15 +167,26 @@ impl jack::ProcessHandler for TrackManager {
 
         // Only process one command per iteration.
         match self.command_rx.try_recv() {
-            Ok(TrackCommand::AdvanceTrackState) => {
-                let track_idx = self.focused_track_id as usize;
-                self.tracks[track_idx].advance_state(&mut self.global_ctr);
+            Ok(TrackCommand::AdvanceTrack(id)) => {
+                self.tracks[id as usize].advance_state(&mut self.global_ctr);
                 self.response_tx
                     .send(TrackResponse::CommandSucceeded)
                     .unwrap();
             }
-            Ok(TrackCommand::EnqueueOverdub(track_id)) => {
-                self.tracks[track_id as usize].enter_state(track::StateType::Overdubbing);
+            Ok(TrackCommand::OverdubTrack(id)) => {
+                self.tracks[id as usize].enter_state(track::StateType::Overdubbing);
+                self.response_tx
+                    .send(TrackResponse::CommandSucceeded)
+                    .unwrap();
+            }
+            Ok(TrackCommand::PauseTrack(id)) => {
+                self.tracks[id as usize].enter_state(track::StateType::Paused);
+                self.response_tx
+                    .send(TrackResponse::CommandSucceeded)
+                    .unwrap();
+            }
+            Ok(TrackCommand::ClearTrack(id)) => {
+                self.tracks[id as usize].clear();
                 self.response_tx
                     .send(TrackResponse::CommandSucceeded)
                     .unwrap();
@@ -190,34 +197,15 @@ impl jack::ProcessHandler for TrackManager {
                     .send(TrackResponse::CommandSucceeded)
                     .unwrap();
             }
-            Ok(TrackCommand::FocusOnTrack(track_id)) => {
-                self.focused_track_id = track_id;
-                self.response_tx
-                    .send(TrackResponse::CommandSucceeded)
-                    .unwrap();
-                self.info_tx
-                    .send(TrackInfo::FocusedTrackChanged(track_id))
-                    .unwrap();
-            }
             _ => {}
         }
 
-        // Process MIDI events first, as they impact control flow.
-        let focused_track = &mut self.tracks[self.focused_track_id as usize];
-        for midi_event in self.ports.control.iter(ps) {
-            focused_track.handle_midi_event(&mut self.global_ctr, midi_event.bytes);
-        }
-
-        // Read audio data from stereo input ports.
-        focused_track.read_from(
-            &mut self.global_ctr,
-            self.ports.input_fl.as_slice(ps),
-            self.ports.input_fr.as_slice(ps),
-        );
-
-        // Clear output buffers.
+        let input_fl = self.ports.input_fl.as_slice(ps);
+        let input_fr = self.ports.input_fr.as_slice(ps);
         let output_fl = self.ports.output_fl.as_mut_slice(ps);
         let output_fr = self.ports.output_fr.as_mut_slice(ps);
+
+        // Clear output buffers.
         for i in 0..output_fl.len() {
             output_fl[i] = 0.0;
             output_fr[i] = 0.0;
@@ -225,6 +213,7 @@ impl jack::ProcessHandler for TrackManager {
 
         // Mix all tracks.
         for track in self.tracks.iter_mut() {
+            track.read_from(&mut self.global_ctr, input_fl, input_fr);
             track.write_to(&mut self.global_ctr, output_fl, output_fr);
 
             // Post a status update.

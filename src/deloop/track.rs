@@ -71,8 +71,6 @@ pub struct Track {
     settings: Settings,
     sync_ctr_id: TrackId,
     state: StateType,
-    last_state: StateType,
-    last_state_change: std::time::Instant,
     read_head: usize,
     write_head: usize,
     last_write_head: usize,
@@ -96,8 +94,6 @@ impl Track {
             },
             sync_ctr_id: id,
             state: StateType::Idle,
-            last_state: StateType::Idle,
-            last_state_change: std::time::Instant::now(),
             read_head: 0,
             write_head: 0,
             last_write_head: 0,
@@ -157,15 +153,6 @@ impl Track {
 
     /// Advance the track's state machine.
     pub fn advance_state(&mut self, global_ctr: &mut GlobalCounter) {
-        const DOUBLE_CLICK_DURATION: std::time::Duration = std::time::Duration::from_millis(500);
-        let double_click_detected = self.last_state_change.elapsed() < DOUBLE_CLICK_DURATION;
-
-        // Allow short recordings, otherwise clear the track on double click
-        if double_click_detected && self.state != StateType::Recording {
-            self.clear();
-            return;
-        }
-
         // Perform state transition
         self.enter_state(match self.state {
             StateType::Idle => {
@@ -173,7 +160,7 @@ impl Track {
                 match self.settings.sync {
                     SyncTo::None => StateType::RecordingQueuedOnTick(global_ctr.absolute(self.id)),
                     SyncTo::Track(track_id) => {
-                        StateType::RecordingQueuedOnTick(global_ctr.get_next_loop(track_id))
+                        StateType::RecordingQueuedOnTick(global_ctr.next_loop(track_id))
                     }
                     SyncTo::RisingEdge(thresh) => StateType::RecordingQueuedOnRisingEdge(thresh),
                 }
@@ -187,23 +174,19 @@ impl Track {
                 if self.sync_ctr_id == self.id {
                     StateType::OverdubbingQueued(global_ctr.absolute(self.sync_ctr_id))
                 } else {
-                    StateType::OverdubbingQueued(global_ctr.get_next_loop(self.sync_ctr_id))
+                    StateType::OverdubbingQueued(global_ctr.next_loop(self.sync_ctr_id))
                 }
             }
             StateType::OverdubbingQueued(idx) => StateType::OverdubbingQueued(idx),
             StateType::Overdubbing => StateType::Playing,
             StateType::PlayingQueued(idx) => StateType::PlayingQueued(idx),
             StateType::Playing => StateType::Paused,
-            StateType::Paused => {
-                StateType::PlayingQueued(global_ctr.get_next_loop(self.sync_ctr_id))
-            }
+            StateType::Paused => StateType::PlayingQueued(global_ctr.next_loop(self.sync_ctr_id)),
         });
     }
 
     /// Sets current state within the FSM.
     pub fn enter_state(&mut self, state: StateType) {
-        self.last_state = self.state;
-        self.last_state_change = std::time::Instant::now();
         self.state = state;
     }
 
@@ -235,19 +218,19 @@ impl Track {
                 }
 
                 debug_assert!(record_from <= fl_input.len());
-                self.fl_buffer.extend_from_slice(&fl_input[record_from..]);
-                self.fr_buffer.extend_from_slice(&fr_input[record_from..]);
-                self.state = StateType::Recording;
-                global_ctr.set_len(self.id, self.fl_buffer.len() as u64);
+                self.enter_state(StateType::Recording);
+                self.record(
+                    global_ctr,
+                    &fl_input[record_from..],
+                    &fr_input[record_from..],
+                );
                 global_ctr.reset_to(self.id, (fl_input.len() - record_from) as u64);
             }
             StateType::RecordingQueuedOnRisingEdge(thresh) => {
                 for i in 0..fl_input.len() {
                     if fl_input[i] > thresh || fr_input[i] > thresh {
-                        self.fl_buffer.extend_from_slice(&fl_input[i..]);
-                        self.fr_buffer.extend_from_slice(&fr_input[i..]);
-                        self.state = StateType::Recording;
-                        global_ctr.set_len(self.id, self.fl_buffer.len() as u64);
+                        self.enter_state(StateType::Recording);
+                        self.record(global_ctr, &fl_input[i..], &fr_input[i..]);
                         global_ctr.reset_to(self.id, (fl_input.len() - i) as u64);
                         break;
                     }
@@ -273,7 +256,7 @@ impl Track {
                     }
 
                     self.overdub(&fl_input[overdub_from..], &fr_input[overdub_from..]);
-                    self.state = StateType::Overdubbing;
+                    self.enter_state(StateType::Overdubbing);
                 }
             }
             StateType::Overdubbing => {
@@ -311,7 +294,7 @@ impl Track {
             }
 
             play_from = (idx - start) as usize;
-            self.state = StateType::Playing;
+            self.enter_state(StateType::Playing);
         }
 
         debug_assert!(play_from <= fl_output.len());
@@ -335,8 +318,6 @@ impl Track {
     /// Complete reset of track state.
     pub fn clear(&mut self) {
         self.state = StateType::Idle;
-        self.last_state = StateType::Idle;
-        self.last_state_change = std::time::Instant::now();
         self.read_head = 0;
         self.write_head = 0;
         self.fl_buffer.clear();
@@ -369,21 +350,72 @@ impl Track {
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_stop() {
-        let mut global_ctr = GlobalCounter::new(48000);
-        let mut track = Track::new(TrackId::A);
-        track.state = StateType::Recording;
-        let input_buffer = (0..1024).map(|x| x as f32).collect::<Vec<f32>>();
-        track.read_from(&mut global_ctr, &input_buffer, &input_buffer);
-        track.clear();
-
+    fn assert_defaults(track: &Track) {
         assert_eq!(track.state, StateType::Idle);
-        assert_eq!(track.last_state, StateType::Idle);
-        assert_eq!(track.last_state_change.elapsed().as_secs(), 0);
         assert_eq!(track.read_head, 0);
         assert_eq!(track.write_head, 0);
         assert_eq!(track.fl_buffer.len(), 0);
         assert_eq!(track.fr_buffer.len(), 0);
+    }
+
+    #[test]
+    fn test_clear() {
+        let mut global_ctr = GlobalCounter::new(48000);
+        let mut track = Track::new(TrackId::A);
+        track.enter_state(StateType::Recording);
+        let input_buffer = (0..1024).map(|x| x as f32).collect::<Vec<f32>>();
+        track.read_from(&mut global_ctr, &input_buffer, &input_buffer);
+        track.clear();
+        assert_defaults(&track);
+    }
+
+    #[test]
+    fn test_track_synced_recording() {
+        let mut global_ctr = GlobalCounter::new(48000);
+        let mut track = Track::new(TrackId::A);
+        assert_defaults(&track);
+
+        // Configure track A to sync with track B (with 1024 frame length)
+        track.configure(Settings {
+            sync: SyncTo::Track(TrackId::B),
+            speed: None,
+        });
+        global_ctr.set_len(TrackId::B, 1024);
+        global_ctr.advance_all(512);
+
+        // Queue recording to occur on next track B loop
+        track.advance_state(&mut global_ctr);
+        assert_eq!(track.state, StateType::RecordingQueuedOnTick(1024));
+
+        // Read from input buffer (only 512 samples should be captured)
+        let input_buffer = (0..1024).map(|x| x as f32).collect::<Vec<f32>>();
+        track.read_from(&mut global_ctr, &input_buffer, &input_buffer);
+        global_ctr.advance_all(1024);
+        assert_eq!(track.state, StateType::Recording);
+        assert_eq!(track.read_head, 0);
+        assert_eq!(track.write_head, 512);
+        assert_eq!(track.fl_buffer.len(), 512);
+        assert_eq!(track.fr_buffer.len(), 512);
+
+        // Queue overdubbing to begin on next loop
+        track.advance_state(&mut global_ctr);
+        assert_eq!(track.state, StateType::OverdubbingQueued(2048));
+
+        // Read from input buffer (only 512 samples should be captured)
+        track.read_from(&mut global_ctr, &input_buffer, &input_buffer);
+        global_ctr.advance_all(1024);
+        assert_eq!(track.state, StateType::Overdubbing);
+        assert_eq!(track.read_head, 0);
+        assert_eq!(track.write_head, 512);
+        assert_eq!(track.fl_buffer.len(), 1024);
+        assert_eq!(track.fr_buffer.len(), 1024);
+
+        // Check audio buffers (split and reversed from input)
+        let expected_buffer = (512..1024)
+            .map(|x| (2 * x) as f32)
+            .chain((0..512).map(|x| x as f32))
+            .collect::<Vec<f32>>();
+        assert_eq!(track.fl_buffer, expected_buffer);
+        assert_eq!(track.fr_buffer, expected_buffer);
     }
 }

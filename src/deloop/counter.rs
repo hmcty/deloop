@@ -78,6 +78,39 @@ impl GlobalCounter {
             return 0;
         }
 
-        (counter.len - (counter.cnt + 1 % counter.len)) + counter.cnt + 1
+        (counter.len - (counter.cnt % counter.len)) + counter.cnt
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_helpers() {
+        let mut global_ctr = GlobalCounter::new(48000);
+        assert_eq!(global_ctr.sample_rate, 48000);
+        for track_id in TrackId::ALL_TRACKS {
+            assert_eq!(global_ctr.absolute(track_id), 0);
+        }
+
+        global_ctr.advance_all(100);
+        for track_id in TrackId::ALL_TRACKS {
+            assert_eq!(global_ctr.absolute(track_id), 100);
+        }
+
+        for track_id in TrackId::ALL_TRACKS {
+            global_ctr.set_len(track_id, 200);
+            assert_eq!(global_ctr.get_len(track_id), 200);
+            assert_eq!(global_ctr.relative(track_id), 100);
+            assert_eq!(global_ctr.next_loop(track_id), 200);
+        }
+
+        global_ctr.advance_all(200);
+        for track_id in TrackId::ALL_TRACKS {
+            assert_eq!(global_ctr.get_len(track_id), 200);
+            assert_eq!(global_ctr.relative(track_id), 100);
+            assert_eq!(global_ctr.next_loop(track_id), 400);
+        }
     }
 }

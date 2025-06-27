@@ -98,7 +98,6 @@ impl TrackInterface {
     pub fn show_thumbnail(
         &mut self,
         ui: &mut egui::Ui,
-        client: &mut deloop::Client,
         available_width: f32,
         is_focused: bool,
     ) -> egui::Response {
@@ -123,9 +122,6 @@ impl TrackInterface {
                         let desired_size = available_width * vec2(0.9, 0.5);
                         let resp = ui.allocate_response(desired_size, egui::Sense::click());
                         let rect = resp.rect;
-                        if resp.clicked() {
-                            client.focus_on_track(self.track_id).unwrap();
-                        }
                         let to_screen = emath::RectTransform::from_to(
                             Rect::from_x_y_ranges(0.0..=1.0, -1.0..=1.0),
                             rect,
@@ -278,7 +274,7 @@ impl TrackInterface {
                     .on_hover_text("Enqueue overdub command")
                     .clicked()
                     .then(|| {
-                        client.enqueue_overdub(self.track_id).unwrap();
+                        client.overdub_track(self.track_id).unwrap();
                     });
 
                 ui.set_min_width(ui.available_width());

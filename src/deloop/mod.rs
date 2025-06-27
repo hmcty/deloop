@@ -96,10 +96,10 @@ impl Client {
         updates
     }
 
-    /// Manually advances the state of the focused track.
-    pub fn advance_track_state(&self) -> Result<(), Error> {
+    /// Advances state of the specified track.
+    pub fn advance_track(&self, track_id: TrackId) -> Result<(), Error> {
         self.command_tx
-            .send(TrackCommand::AdvanceTrackState)
+            .send(TrackCommand::AdvanceTrack(track_id))
             .with_whatever_context(|e| e.to_string())?;
         let response = self
             .response_rx
@@ -114,10 +114,10 @@ impl Client {
         }
     }
 
-    /// Force track to overdub existing audio.
-    pub fn enqueue_overdub(&self, track_id: TrackId) -> Result<(), Error> {
+    /// Enable overdubbing on track.
+    pub fn overdub_track(&self, track_id: TrackId) -> Result<(), Error> {
         self.command_tx
-            .send(TrackCommand::EnqueueOverdub(track_id))
+            .send(TrackCommand::OverdubTrack(track_id))
             .with_whatever_context(|e| e.to_string())?;
         let response = self
             .response_rx
@@ -125,7 +125,43 @@ impl Client {
             .with_whatever_context(|e| e.to_string())?;
         match response {
             TrackResponse::CommandFailed => Err(Error::InternalError {
-                message: "Failed to enqueue overdub".to_string(),
+                message: "Failed to enable overdub on track".to_string(),
+                source: None,
+            }),
+            TrackResponse::CommandSucceeded => Ok(()),
+        }
+    }
+
+    /// Stops any playback on track.
+    pub fn pause_track(&self, track_id: TrackId) -> Result<(), Error> {
+        self.command_tx
+            .send(TrackCommand::PauseTrack(track_id))
+            .with_whatever_context(|e| e.to_string())?;
+        let response = self
+            .response_rx
+            .recv_timeout(Duration::from_secs(5))
+            .with_whatever_context(|e| e.to_string())?;
+        match response {
+            TrackResponse::CommandFailed => Err(Error::InternalError {
+                message: "Failed to pause track".to_string(),
+                source: None,
+            }),
+            TrackResponse::CommandSucceeded => Ok(()),
+        }
+    }
+
+    /// Stops track and clears any existing state.
+    pub fn clear_track(&self, track_id: TrackId) -> Result<(), Error> {
+        self.command_tx
+            .send(TrackCommand::ClearTrack(track_id))
+            .with_whatever_context(|e| e.to_string())?;
+        let response = self
+            .response_rx
+            .recv_timeout(Duration::from_secs(5))
+            .with_whatever_context(|e| e.to_string())?;
+        match response {
+            TrackResponse::CommandFailed => Err(Error::InternalError {
+                message: "Failed to clear track".to_string(),
                 source: None,
             }),
             TrackResponse::CommandSucceeded => Ok(()),
@@ -148,24 +184,6 @@ impl Client {
         match response {
             TrackResponse::CommandFailed => Err(Error::InternalError {
                 message: "Failed to configure track".to_string(),
-                source: None,
-            }),
-            TrackResponse::CommandSucceeded => Ok(()),
-        }
-    }
-
-    /// Switches focus to a specified track.
-    pub fn focus_on_track(&mut self, track_id: TrackId) -> Result<(), Error> {
-        self.command_tx
-            .send(TrackCommand::FocusOnTrack(track_id))
-            .with_whatever_context(|e| e.to_string())?;
-        let response = self
-            .response_rx
-            .recv_timeout(Duration::from_secs(5))
-            .with_whatever_context(|e| e.to_string())?;
-        match response {
-            TrackResponse::CommandFailed => Err(Error::InternalError {
-                message: "Failed to focus on track".to_string(),
                 source: None,
             }),
             TrackResponse::CommandSucceeded => Ok(()),

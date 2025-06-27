@@ -99,9 +99,6 @@ impl eframe::App for ControlPanel {
         // Process track updates
         for track_info in self.client.get_track_updates() {
             match track_info {
-                deloop::TrackInfo::FocusedTrackChanged(track_id) => {
-                    self.focused_track = track_id;
-                }
                 deloop::TrackInfo::StatusUpdate(track_id, status) => {
                     self.tracks[track_id as usize].update(status);
                 }
@@ -223,10 +220,10 @@ impl eframe::App for ControlPanel {
                 for track in &mut self.tracks {
                     let is_focused = track.track_id == self.focused_track;
                     if track
-                        .show_thumbnail(ui, &mut self.client, available_width, is_focused)
+                        .show_thumbnail(ui, available_width, is_focused)
                         .clicked()
                     {
-                        let _ = self.client.focus_on_track(track.track_id);
+                        self.focused_track = track.track_id;
                     }
                 }
             });
@@ -246,27 +243,21 @@ impl eframe::App for ControlPanel {
                         if *pressed {
                             match *key {
                                 egui::Key::Space => {
-                                    _ = util::log_on_err(self.client.advance_track_state());
+                                    _ = util::log_on_err(
+                                        self.client.advance_track(self.focused_track),
+                                    );
                                 }
                                 egui::Key::Num1 => {
-                                    _ = util::log_on_err(
-                                        self.client.focus_on_track(deloop::TrackId::A),
-                                    );
+                                    self.focused_track = deloop::TrackId::A;
                                 }
                                 egui::Key::Num2 => {
-                                    _ = util::log_on_err(
-                                        self.client.focus_on_track(deloop::TrackId::B),
-                                    );
+                                    self.focused_track = deloop::TrackId::B;
                                 }
                                 egui::Key::Num3 => {
-                                    _ = util::log_on_err(
-                                        self.client.focus_on_track(deloop::TrackId::C),
-                                    );
+                                    self.focused_track = deloop::TrackId::C;
                                 }
                                 egui::Key::Num4 => {
-                                    _ = util::log_on_err(
-                                        self.client.focus_on_track(deloop::TrackId::D),
-                                    );
+                                    self.focused_track = deloop::TrackId::D;
                                 }
                                 _ => {}
                             }

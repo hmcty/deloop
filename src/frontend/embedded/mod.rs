@@ -1,5 +1,5 @@
 use rppal::gpio::{Event, Gpio, Trigger};
-use std::sync::{Arc, Mutex, Condvar};
+use std::sync::{Arc, Condvar, Mutex};
 use std::time::Duration;
 
 use crate::deloop;
@@ -11,11 +11,9 @@ struct FrontendState {
     should_exit: bool,
 }
 
-
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let client = deloop::Client::default();
     let state = Arc::new(Mutex::new(FrontendState { should_exit: false }));
-    
 
     // On each press, advance track state.
     let mut track_adv = Gpio::new()?.get(TRACK_ADVANCE_PIN)?.into_input_pullup();
