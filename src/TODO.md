@@ -2,7 +2,7 @@
 
 - [x] Record on rising edge
 - [x] Keyboard shortcuts for tracks
-- [ ] Non-linear state transitions (re-enter overdubbing from play)
+- [ ] Fixed capacity
 - [ ] Time dilation
 - [ ] Store on disk
 - [ ] Playback from WAV

@@ -123,7 +123,7 @@ pub struct TrackManager {
     /// The tracks being managed.
     tracks: [track::Track; TrackId::NUM_TRACKS],
 
-    // Latency of the most recent audio processing loop.
+    /// Latency of the most recent audio processing loop.
     prev_processing_latency: Duration,
 }
 

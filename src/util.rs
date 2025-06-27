@@ -1,5 +1,6 @@
 use crate::deloop;
 use log::error;
+use std::boxed::Box;
 
 #[allow(dead_code)]
 pub fn truncate_string(s: &str, max_len: usize) -> String {
@@ -18,5 +19,13 @@ pub fn log_on_err<T>(result: Result<T, deloop::Error>) -> Result<T, deloop::Erro
             error!("{}", e);
             Err(e)
         }
+    }
+}
+
+#[allow(dead_code)]
+pub fn boxed_slice<T: Default + Clone, const N: usize>() -> Box<[T; N]> {
+    match vec![Default::default(); N].into_boxed_slice().try_into() {
+        Ok(r) => r,
+        Err(_) => unreachable!(),
     }
 }
