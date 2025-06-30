@@ -1,38 +1,43 @@
-use rppal::gpio::{Event, Gpio, Trigger};
-use std::sync::{Arc, Condvar, Mutex};
+use log::error;
+use rppal::gpio::{Gpio, Trigger};
 use std::time::Duration;
 
 use crate::deloop;
 
 // Expected pin configuration.
-const TRACK_ADVANCE_PIN: u8 = 16;
+// https://datasheets.raspberrypi.com/cm4io/cm4io-datasheet.pdf
+const TRACK_A_PIN: u8 = 16;
+const TRACK_B_PIN: u8 = 12;
 
-struct FrontendState {
-    should_exit: bool,
+/// Macro to set up a GPIO pin for track button input.
+/// Takes a client, pin number, and track ID and sets up the appropriate interrupt handler.
+macro_rules! create_track_button {
+    ($client:expr, $pin:expr, $track_id:expr) => {{
+        let sender = $client.command_sender().clone();
+        Gpio::new()?
+            .get($pin)?
+            .into_input_pullup()
+            .set_async_interrupt(
+                Trigger::FallingEdge,
+                Some(Duration::from_millis(25)),
+                move |_event| {
+                    deloop::send_advance_track(&sender, $track_id).unwrap_or_else(|e| {
+                        error!("Failed to advance track {:?}: {}", $track_id, e)
+                    });
+                },
+            )?
+    }};
 }
 
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let client = deloop::Client::default();
-    let state = Arc::new(Mutex::new(FrontendState { should_exit: false }));
 
     // On each press, advance track state.
-    let mut track_adv = Gpio::new()?.get(TRACK_ADVANCE_PIN)?.into_input_pullup();
-    track_adv.set_async_interrupt(
-        Trigger::FallingEdge,
-        Some(Duration::from_millis(25)),
-        move |event| {
-            client.advance_track_state();
-        },
-    )?;
+    create_track_button!(&client, TRACK_A_PIN, deloop::TrackId::A);
+    create_track_button!(&client, TRACK_B_PIN, deloop::TrackId::B);
 
     // Loop until exit signal is received.
     loop {
-        let (lock, cvar) = &*state;
-        let mut lock = lock.lock().unwrap();
-        while !lock.should_exit {
-            lock = cvar.wait(lock).unwrap();
-        }
-
         break;
     }
 

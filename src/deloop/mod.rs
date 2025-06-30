@@ -45,6 +45,16 @@ pub enum Error {
     },
 }
 
+pub fn send_advance_track(
+    command_tx: &Sender<TrackCommand>,
+    track_id: TrackId,
+) -> Result<(), Error> {
+    command_tx
+        .send(TrackCommand::Advance(track_id))
+        .with_whatever_context(|e| e.to_string())?;
+    Ok(())
+}
+
 /// Deloop's Jack client
 ///
 /// Bridges the gap between user commands and audio processing.
@@ -96,11 +106,14 @@ impl Client {
         updates
     }
 
+    /// Returns a reference to the command sender.
+    pub fn command_sender(&self) -> &Sender<TrackCommand> {
+        &self.command_tx
+    }
+
     /// Advances state of the specified track.
     pub fn advance_track(&self, track_id: TrackId) -> Result<(), Error> {
-        self.command_tx
-            .send(TrackCommand::AdvanceTrack(track_id))
-            .with_whatever_context(|e| e.to_string())?;
+        send_advance_track(&self.command_tx, track_id)?;
         let response = self
             .response_rx
             .recv_timeout(Duration::from_secs(5))
@@ -117,7 +130,7 @@ impl Client {
     /// Enable overdubbing on track.
     pub fn overdub_track(&self, track_id: TrackId) -> Result<(), Error> {
         self.command_tx
-            .send(TrackCommand::OverdubTrack(track_id))
+            .send(TrackCommand::Overdub(track_id))
             .with_whatever_context(|e| e.to_string())?;
         let response = self
             .response_rx
@@ -135,7 +148,7 @@ impl Client {
     /// Stops any playback on track.
     pub fn pause_track(&self, track_id: TrackId) -> Result<(), Error> {
         self.command_tx
-            .send(TrackCommand::PauseTrack(track_id))
+            .send(TrackCommand::Pause(track_id))
             .with_whatever_context(|e| e.to_string())?;
         let response = self
             .response_rx
@@ -153,7 +166,7 @@ impl Client {
     /// Stops track and clears any existing state.
     pub fn clear_track(&self, track_id: TrackId) -> Result<(), Error> {
         self.command_tx
-            .send(TrackCommand::ClearTrack(track_id))
+            .send(TrackCommand::Clear(track_id))
             .with_whatever_context(|e| e.to_string())?;
         let response = self
             .response_rx
@@ -175,7 +188,7 @@ impl Client {
         settings: track::Settings,
     ) -> Result<(), Error> {
         self.command_tx
-            .send(TrackCommand::ConfigureTrack(track_id, settings))
+            .send(TrackCommand::Configure(track_id, settings))
             .with_whatever_context(|e| e.to_string())?;
         let response = self
             .response_rx

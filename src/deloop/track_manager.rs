@@ -83,11 +83,11 @@ impl TrackId {
 
 // TODO: Add unique indentifiers for commands
 pub enum TrackCommand {
-    AdvanceTrack(TrackId),
-    OverdubTrack(TrackId),
-    PauseTrack(TrackId),
-    ClearTrack(TrackId),
-    ConfigureTrack(TrackId, track::Settings),
+    Advance(TrackId),
+    Overdub(TrackId),
+    Pause(TrackId),
+    Clear(TrackId),
+    Configure(TrackId, track::Settings),
 }
 
 pub enum TrackResponse {
@@ -167,31 +167,31 @@ impl jack::ProcessHandler for TrackManager {
 
         // Only process one command per iteration.
         match self.command_rx.try_recv() {
-            Ok(TrackCommand::AdvanceTrack(id)) => {
+            Ok(TrackCommand::Advance(id)) => {
                 self.tracks[id as usize].advance_state(&mut self.global_ctr);
                 self.response_tx
                     .send(TrackResponse::CommandSucceeded)
                     .unwrap();
             }
-            Ok(TrackCommand::OverdubTrack(id)) => {
+            Ok(TrackCommand::Overdub(id)) => {
                 self.tracks[id as usize].enter_state(track::StateType::Overdubbing);
                 self.response_tx
                     .send(TrackResponse::CommandSucceeded)
                     .unwrap();
             }
-            Ok(TrackCommand::PauseTrack(id)) => {
+            Ok(TrackCommand::Pause(id)) => {
                 self.tracks[id as usize].enter_state(track::StateType::Paused);
                 self.response_tx
                     .send(TrackResponse::CommandSucceeded)
                     .unwrap();
             }
-            Ok(TrackCommand::ClearTrack(id)) => {
+            Ok(TrackCommand::Clear(id)) => {
                 self.tracks[id as usize].clear();
                 self.response_tx
                     .send(TrackResponse::CommandSucceeded)
                     .unwrap();
             }
-            Ok(TrackCommand::ConfigureTrack(track_id, settings)) => {
+            Ok(TrackCommand::Configure(track_id, settings)) => {
                 self.tracks[track_id as usize].configure(settings);
                 self.response_tx
                     .send(TrackResponse::CommandSucceeded)
