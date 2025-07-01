@@ -84,7 +84,8 @@ impl TrackId {
 // TODO: Add unique indentifiers for commands
 pub enum TrackCommand {
     Advance(TrackId),
-    Overdub(TrackId),
+    EnableOverdub(TrackId, bool),
+    SetVolume(TrackId, f32),
     Pause(TrackId),
     Clear(TrackId),
     Configure(TrackId, track::Settings),
@@ -173,8 +174,14 @@ impl jack::ProcessHandler for TrackManager {
                     .send(TrackResponse::CommandSucceeded)
                     .unwrap();
             }
-            Ok(TrackCommand::Overdub(id)) => {
-                self.tracks[id as usize].enter_state(track::StateType::Overdubbing);
+            Ok(TrackCommand::EnableOverdub(id, en)) => {
+                self.tracks[id as usize].enable_overdub(en);
+                self.response_tx
+                    .send(TrackResponse::CommandSucceeded)
+                    .unwrap();
+            }
+            Ok(TrackCommand::SetVolume(id, volume)) => {
+                self.tracks[id as usize].set_volume(volume);
                 self.response_tx
                     .send(TrackResponse::CommandSucceeded)
                     .unwrap();

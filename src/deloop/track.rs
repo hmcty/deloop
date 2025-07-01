@@ -4,32 +4,23 @@ use super::TrackId;
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum StateType {
     Idle,
-    RecordingQueuedOnTick(u64),
-    RecordingQueuedOnRisingEdge(f32),
+    StartRecordingOnTick(u64),
     Recording,
-    OverdubbingQueued(u64),
-    Overdubbing,
-    PlayingQueued(u64),
+    StopRecordingOnTick(u64),
+    StartPlayingOnTick(u64),
     Playing,
     Paused,
 }
 
 impl StateType {
     pub fn is_recording(&self) -> bool {
-        matches!(self, StateType::Recording | StateType::OverdubbingQueued(_))
-    }
-
-    pub fn is_being_modified(&self) -> bool {
-        self.is_recording() || matches!(self, StateType::Overdubbing)
+        matches!(self, StateType::Recording) || matches!(self, StateType::StartRecordingOnTick(_))
     }
 
     pub fn is_stopped(&self) -> bool {
         matches!(
             self,
-            StateType::Idle
-                | StateType::RecordingQueuedOnTick(_)
-                | StateType::RecordingQueuedOnRisingEdge(_)
-                | StateType::Paused
+            StateType::Idle | StateType::StartRecordingOnTick(_) | StateType::Paused
         )
     }
 }
@@ -38,7 +29,6 @@ impl StateType {
 pub enum SyncTo {
     None,
     Track(TrackId),
-    RisingEdge(f32),
 }
 
 impl std::fmt::Debug for SyncTo {
@@ -46,7 +36,6 @@ impl std::fmt::Debug for SyncTo {
         match self {
             SyncTo::None => write!(f, "None"),
             SyncTo::Track(track_id) => write!(f, "Track (id={:?})", track_id),
-            SyncTo::RisingEdge(_) => write!(f, "Rising edge"),
         }
     }
 }
@@ -76,6 +65,8 @@ pub struct Track {
     fl_buffer: Vec<f32>,
     fr_buffer: Vec<f32>,
     status_changed: bool,
+    overdub_enabled: bool,
+    volume: f32,
 }
 
 impl Track {
@@ -100,6 +91,8 @@ impl Track {
             fl_buffer: Vec::with_capacity(DEFAULT_BUFFER_SIZE),
             fr_buffer: Vec::with_capacity(DEFAULT_BUFFER_SIZE),
             status_changed: false,
+            overdub_enabled: false,
+            volume: 1.0,
         }
     }
 
@@ -141,6 +134,16 @@ impl Track {
         };
     }
 
+    /// Enable/disable overdub on the track.
+    pub fn enable_overdub(&mut self, enable: bool) {
+        self.overdub_enabled = enable;
+    }
+
+    /// Set the volume of the track.
+    pub fn set_volume(&mut self, volume: f32) {
+        self.volume = volume.clamp(0.0, 1.0);
+    }
+
     /// Forward midi events to the track.
     pub fn handle_midi_event(&mut self, global_ctr: &mut GlobalCounter, event: &[u8]) {
         if event.len() != 3 {
@@ -159,40 +162,19 @@ impl Track {
 
     /// Advance the track's state machine.
     pub fn advance_state(&mut self, global_ctr: &mut GlobalCounter) {
-        // Perform state transition
+        let sync_tick: u64 = match self.settings.sync {
+            SyncTo::None => global_ctr.absolute(self.id),
+            SyncTo::Track(track_id) => global_ctr.next_loop(track_id),
+        };
+
         self.enter_state(match self.state {
-            StateType::Idle => {
-                // If we're the owner of the counter, request on the next frame
-                match self.settings.sync {
-                    SyncTo::None => StateType::RecordingQueuedOnTick(global_ctr.absolute(self.id)),
-                    SyncTo::Track(track_id) => {
-                        StateType::RecordingQueuedOnTick(global_ctr.next_loop(track_id))
-                    }
-                    SyncTo::RisingEdge(thresh) => StateType::RecordingQueuedOnRisingEdge(thresh),
-                }
-            }
-            StateType::RecordingQueuedOnTick(idx) => StateType::RecordingQueuedOnTick(idx),
-            StateType::RecordingQueuedOnRisingEdge(thresh) => {
-                StateType::RecordingQueuedOnRisingEdge(thresh)
-            }
-            StateType::Recording => {
-                if self.sync_ctr_id == self.id {
-                    StateType::OverdubbingQueued(global_ctr.absolute(self.sync_ctr_id))
-                } else {
-                    StateType::OverdubbingQueued(global_ctr.next_loop(self.sync_ctr_id))
-                }
-            }
-            StateType::OverdubbingQueued(idx) => StateType::OverdubbingQueued(idx),
-            StateType::Overdubbing => StateType::Playing,
-            StateType::PlayingQueued(idx) => StateType::PlayingQueued(idx),
+            StateType::Idle => StateType::StartRecordingOnTick(sync_tick),
+            StateType::StartRecordingOnTick(x) => StateType::StartRecordingOnTick(x),
+            StateType::Recording => StateType::StopRecordingOnTick(sync_tick),
+            StateType::StopRecordingOnTick(x) => StateType::StopRecordingOnTick(x),
+            StateType::StartPlayingOnTick(x) => StateType::StartPlayingOnTick(x),
             StateType::Playing => StateType::Paused,
-            StateType::Paused => {
-                if self.sync_ctr_id == self.id {
-                    StateType::PlayingQueued(global_ctr.absolute(self.sync_ctr_id))
-                } else {
-                    StateType::PlayingQueued(global_ctr.next_loop(self.sync_ctr_id))
-                }
-            }
+            StateType::Paused => StateType::StartPlayingOnTick(sync_tick),
         });
     }
 
@@ -219,14 +201,14 @@ impl Track {
         let end = start + fl_input.len() as u64;
 
         match self.state {
-            StateType::RecordingQueuedOnTick(idx) => {
-                if end < idx {
+            StateType::StartRecordingOnTick(tick) => {
+                if end < tick {
                     return;
                 }
 
                 let mut record_from = 0;
-                if start < idx {
-                    record_from = (idx - start) as usize;
+                if start < tick {
+                    record_from = (tick - start) as usize;
                 }
 
                 debug_assert!(record_from <= fl_input.len());
@@ -238,44 +220,34 @@ impl Track {
                 );
                 global_ctr.reset_to(self.id, (fl_input.len() - record_from) as u64);
             }
-            StateType::RecordingQueuedOnRisingEdge(thresh) => {
-                for i in 0..fl_input.len() {
-                    if fl_input[i] > thresh || fr_input[i] > thresh {
-                        self.enter_state(StateType::Recording);
-                        self.record(global_ctr, &fl_input[i..], &fr_input[i..]);
-                        global_ctr.reset_to(self.id, (fl_input.len() - i) as u64);
-                        break;
-                    }
-                }
-            }
             StateType::Recording => self.record(global_ctr, fl_input, fr_input),
-            StateType::OverdubbingQueued(idx) => {
-                if end < idx {
-                    self.record(global_ctr, fl_input, fr_input);
-                } else {
-                    let mut overdub_from = 0;
-                    if start < idx {
-                        overdub_from = (idx - start) as usize;
-                    }
-
-                    debug_assert!(overdub_from <= fl_input.len());
-                    if overdub_from > 0 {
-                        self.record(
-                            global_ctr,
-                            &fl_input[..overdub_from],
-                            &fr_input[..overdub_from],
-                        );
-                    }
-
-                    self.overdub(&fl_input[overdub_from..], &fr_input[overdub_from..]);
-                    self.enter_state(StateType::Overdubbing);
-                }
-            }
-            StateType::Overdubbing => {
-                if self.fl_buffer.is_empty() {
+            StateType::StopRecordingOnTick(tick) => {
+                if end < tick {
                     return;
                 }
 
+                let mut record_to = 0;
+                if start < tick {
+                    record_to = (tick - start) as usize;
+                }
+
+                debug_assert!(record_to <= fl_input.len());
+                self.enter_state(StateType::StartPlayingOnTick(tick));
+                self.record(global_ctr, &fl_input[..record_to], &fr_input[..record_to]);
+                if self.overdub_enabled {
+                    self.overdub(&fl_input[record_to..], &fr_input[record_to..]);
+                }
+            }
+            StateType::StartPlayingOnTick(tick) if self.overdub_enabled => {
+                let mut overdub_from = 0;
+                if start < tick {
+                    overdub_from = (tick - start) as usize;
+                }
+
+                debug_assert!(overdub_from <= fl_input.len());
+                self.overdub(&fl_input[overdub_from..], &fr_input[overdub_from..]);
+            }
+            StateType::Playing if self.overdub_enabled => {
                 self.overdub(fl_input, fr_input);
             }
             _ => (),
@@ -299,15 +271,17 @@ impl Track {
         let start = global_ctr.absolute(self.sync_ctr_id);
         let end = start + fl_output.len() as u64;
 
-        let mut play_from: usize = 0;
-        if let StateType::PlayingQueued(idx) = self.state {
-            if end < idx {
-                return;
+        let play_from: usize = match self.state {
+            StateType::StartPlayingOnTick(tick) if end > tick => {
+                self.enter_state(StateType::Playing);
+                if start < tick {
+                    (tick - start) as usize
+                } else {
+                    0
+                }
             }
-
-            play_from = (idx - start) as usize;
-            self.enter_state(StateType::Playing);
-        }
+            _ => 0,
+        };
 
         debug_assert!(play_from <= fl_output.len());
         for i in play_from..fl_output.len() {
@@ -319,8 +293,10 @@ impl Track {
                 self.read_head = 0;
             }
 
-            fl_output[i] += self.fl_buffer[self.read_head];
-            fr_output[i] += self.fr_buffer[self.read_head];
+            fl_output[i] =
+                (fl_output[i] + (self.fl_buffer[self.read_head] * self.volume)).clamp(-1.0, 1.0);
+            fr_output[i] =
+                (fr_output[i] + (self.fr_buffer[self.read_head] * self.volume)).clamp(-1.0, 1.0);
             self.read_head += 1;
         }
 
@@ -393,16 +369,20 @@ mod tests {
             sync: SyncTo::Track(TrackId::B),
             speed: None,
         });
+        track.enable_overdub(true);
         global_ctr.set_len(TrackId::B, 1024);
         global_ctr.advance_all(512);
 
         // Queue recording to occur on next track B loop
         track.advance_state(&mut global_ctr);
-        assert_eq!(track.state, StateType::RecordingQueuedOnTick(1024));
+        assert_eq!(track.state, StateType::StartRecordingOnTick(1024));
 
         // Read from input buffer (only 512 samples should be captured)
         let input_buffer = (0..1024).map(|x| x as f32).collect::<Vec<f32>>();
+        let mut output_l = vec![0.0; 1024];
+        let mut output_r = vec![0.0; 1024];
         track.read_from(&mut global_ctr, &input_buffer, &input_buffer);
+        track.write_to(&mut global_ctr, &mut output_l, &mut output_r);
         global_ctr.advance_all(1024);
         assert_eq!(track.state, StateType::Recording);
         assert_eq!(track.read_head, 0);
@@ -412,13 +392,14 @@ mod tests {
 
         // Queue overdubbing to begin on next loop
         track.advance_state(&mut global_ctr);
-        assert_eq!(track.state, StateType::OverdubbingQueued(2048));
+        assert_eq!(track.state, StateType::StopRecordingOnTick(2048));
 
         // Read from input buffer (only 512 samples should be captured)
         track.read_from(&mut global_ctr, &input_buffer, &input_buffer);
+        track.write_to(&mut global_ctr, &mut output_l, &mut output_r);
         global_ctr.advance_all(1024);
-        assert_eq!(track.state, StateType::Overdubbing);
-        assert_eq!(track.read_head, 0);
+        assert_eq!(track.state, StateType::Playing);
+        assert_eq!(track.read_head, 512);
         assert_eq!(track.write_head, 512);
         assert_eq!(track.fl_buffer.len(), 1024);
         assert_eq!(track.fr_buffer.len(), 1024);

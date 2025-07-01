@@ -214,9 +214,9 @@ impl Client {
     }
 
     /// Enable overdubbing on track.
-    pub fn overdub_track(&self, track_id: TrackId) -> Result<(), Error> {
+    pub fn enable_overdub_on_track(&self, track_id: TrackId, enable: bool) -> Result<(), Error> {
         self.command_tx
-            .send(TrackCommand::Overdub(track_id))
+            .send(TrackCommand::EnableOverdub(track_id, enable))
             .with_whatever_context(|e| e.to_string())?;
         let response = self
             .response_rx
@@ -224,7 +224,24 @@ impl Client {
             .with_whatever_context(|e| e.to_string())?;
         match response {
             TrackResponse::CommandFailed => Err(Error::InternalError {
-                message: "Failed to enable overdub on track".to_string(),
+                message: "Failed to set overdub on track".to_string(),
+                source: None,
+            }),
+            TrackResponse::CommandSucceeded => Ok(()),
+        }
+    }
+
+    pub fn set_track_volume(&self, track_id: TrackId, volume: f32) -> Result<(), Error> {
+        self.command_tx
+            .send(TrackCommand::SetVolume(track_id, volume))
+            .with_whatever_context(|e| e.to_string())?;
+        let response = self
+            .response_rx
+            .recv_timeout(Duration::from_secs(5))
+            .with_whatever_context(|e| e.to_string())?;
+        match response {
+            TrackResponse::CommandFailed => Err(Error::InternalError {
+                message: "Failed to set track volume".to_string(),
                 source: None,
             }),
             TrackResponse::CommandSucceeded => Ok(()),

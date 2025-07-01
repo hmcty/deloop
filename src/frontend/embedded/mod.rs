@@ -1,6 +1,9 @@
 use log::error;
 use rppal::gpio::{Gpio, Trigger};
+use rppal::spi::{Bus, Mode, SlaveSelect, Spi};
 use std::time::Duration;
+
+mod mcp3008;
 
 use crate::deloop;
 
@@ -8,6 +11,8 @@ use crate::deloop;
 // https://datasheets.raspberrypi.com/cm4io/cm4io-datasheet.pdf
 const TRACK_A_PIN: u8 = 16;
 const TRACK_B_PIN: u8 = 12;
+
+const ADC_CHANNEL_VOLUME: u8 = 7; // Volume control channel on MCP3008
 
 /// Macro to set up a GPIO pin for track button input.
 /// Takes a client, pin number, and track ID and sets up the appropriate interrupt handler.
@@ -52,12 +57,14 @@ macro_rules! add_track_interrupt {
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let mut client = deloop::Client::default();
 
-    // On each press, advance track state.
     let mut a_btn = Gpio::new()?.get(TRACK_A_PIN)?.into_input_pullup();
     add_track_interrupt!(&mut a_btn, client, deloop::TrackId::A);
 
     let mut b_btn = Gpio::new()?.get(TRACK_B_PIN)?.into_input_pullup();
     add_track_interrupt!(&mut b_btn, client, deloop::TrackId::B);
+
+    let mut spi = Spi::new(Bus::Spi0, SlaveSelect::Ss0, 1_000_000, Mode::Mode0)?;
+    let mut adc = mcp3008::Mcp3008::new(spi);
 
     // Loop until exit signal is received.
     loop {
@@ -69,6 +76,10 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                 _ => {}
             }
         }
+
+        let vol: f32 = adc.read(ADC_CHANNEL_VOLUME)?;
+        client.set_track_volume(deloop::TrackId::A, vol)?;
+        client.set_track_volume(deloop::TrackId::B, vol)?;
 
         std::thread::sleep(Duration::from_millis(100));
     }
