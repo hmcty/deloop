@@ -218,15 +218,18 @@ impl jack::ProcessHandler for TrackManager {
 
             // Post a status update.
             // TODO: Post only as needed.
-            let status = track.get_status();
-            let status_update = if status.state.is_being_modified() {
-                let (fl, fr) = track.get_raw_buffers();
-                TrackInfo::WaveformUpdate(track.id(), status, fl.to_vec(), fr.to_vec())
-            } else {
-                TrackInfo::StatusUpdate(track.id(), status)
-            };
-
-            self.info_tx.send(status_update).unwrap();
+            // let status = track.get_status();
+            // let status_update = if status.state.is_being_modified() {
+            //     let (fl, fr) = track.get_raw_buffers();
+            //     TrackInfo::WaveformUpdate(track.id(), status, fl.to_vec(), fr.to_vec())
+            // } else {
+            //     TrackInfo::StatusUpdate(track.id(), status)
+            // };
+            if let Some(status_update) = track.get_status() {
+                self.info_tx
+                    .send(TrackInfo::StatusUpdate(track.id(), status_update))
+                    .unwrap();
+            }
         }
 
         self.global_ctr.advance_all(ps.n_frames() as u64);

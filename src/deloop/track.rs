@@ -30,7 +30,6 @@ impl StateType {
                 | StateType::RecordingQueuedOnTick(_)
                 | StateType::RecordingQueuedOnRisingEdge(_)
                 | StateType::Paused
-                | StateType::PlayingQueued(_)
         )
     }
 }
@@ -76,6 +75,7 @@ pub struct Track {
     last_write_head: usize,
     fl_buffer: Vec<f32>,
     fr_buffer: Vec<f32>,
+    status_changed: bool,
 }
 
 impl Track {
@@ -99,6 +99,7 @@ impl Track {
             last_write_head: 0,
             fl_buffer: Vec::with_capacity(DEFAULT_BUFFER_SIZE),
             fr_buffer: Vec::with_capacity(DEFAULT_BUFFER_SIZE),
+            status_changed: false,
         }
     }
 
@@ -108,13 +109,18 @@ impl Track {
     }
 
     /// Get metadata about the track.
-    pub fn get_status(&self) -> Status {
-        Status {
+    pub fn get_status(&mut self) -> Option<Status> {
+        if !self.status_changed {
+            return None;
+        }
+
+        self.status_changed = false;
+        Some(Status {
             state: self.state,
             buf_index: self.read_head,
             buf_size: self.fl_buffer.len(),
             ctr: self.sync_ctr_id,
-        }
+        })
     }
 
     /// Get slices of front-left and front-right buffers.
@@ -170,7 +176,6 @@ impl Track {
                 StateType::RecordingQueuedOnRisingEdge(thresh)
             }
             StateType::Recording => {
-                // If we're the owner of the counter, request on the next frame
                 if self.sync_ctr_id == self.id {
                     StateType::OverdubbingQueued(global_ctr.absolute(self.sync_ctr_id))
                 } else {
@@ -181,12 +186,19 @@ impl Track {
             StateType::Overdubbing => StateType::Playing,
             StateType::PlayingQueued(idx) => StateType::PlayingQueued(idx),
             StateType::Playing => StateType::Paused,
-            StateType::Paused => StateType::PlayingQueued(global_ctr.next_loop(self.sync_ctr_id)),
+            StateType::Paused => {
+                if self.sync_ctr_id == self.id {
+                    StateType::PlayingQueued(global_ctr.absolute(self.sync_ctr_id))
+                } else {
+                    StateType::PlayingQueued(global_ctr.next_loop(self.sync_ctr_id))
+                }
+            }
         });
     }
 
     /// Sets current state within the FSM.
     pub fn enter_state(&mut self, state: StateType) {
+        self.status_changed = true;
         self.state = state;
     }
 
@@ -317,6 +329,7 @@ impl Track {
 
     /// Complete reset of track state.
     pub fn clear(&mut self) {
+        self.status_changed = true;
         self.state = StateType::Idle;
         self.read_head = 0;
         self.write_head = 0;

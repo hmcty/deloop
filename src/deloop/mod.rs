@@ -55,11 +55,97 @@ pub fn send_advance_track(
     Ok(())
 }
 
+pub fn send_clear_track(command_tx: &Sender<TrackCommand>, track_id: TrackId) -> Result<(), Error> {
+    command_tx
+        .send(TrackCommand::Clear(track_id))
+        .with_whatever_context(|e| e.to_string())?;
+    Ok(())
+}
+
+struct Notifications;
+
+impl jack::NotificationHandler for Notifications {
+    fn thread_init(&self, _: &jack::Client) {
+        println!("JACK: thread init");
+    }
+
+    /// Not much we can do here, see https://man7.org/linux/man-pages/man7/signal-safety.7.html.
+    unsafe fn shutdown(&mut self, _: jack::ClientStatus, _: &str) {}
+
+    fn freewheel(&mut self, _: &jack::Client, is_enabled: bool) {
+        println!(
+            "JACK: freewheel mode is {}",
+            if is_enabled { "on" } else { "off" }
+        );
+    }
+
+    fn sample_rate(&mut self, _: &jack::Client, srate: jack::Frames) -> jack::Control {
+        println!("JACK: sample rate changed to {srate}");
+        jack::Control::Continue
+    }
+
+    fn client_registration(&mut self, _: &jack::Client, name: &str, is_reg: bool) {
+        println!(
+            "JACK: {} client with name \"{}\"",
+            if is_reg { "registered" } else { "unregistered" },
+            name
+        );
+    }
+
+    fn port_registration(&mut self, _: &jack::Client, port_id: jack::PortId, is_reg: bool) {
+        println!(
+            "JACK: {} port with id {}",
+            if is_reg { "registered" } else { "unregistered" },
+            port_id
+        );
+    }
+
+    fn port_rename(
+        &mut self,
+        _: &jack::Client,
+        port_id: jack::PortId,
+        old_name: &str,
+        new_name: &str,
+    ) -> jack::Control {
+        println!("JACK: port with id {port_id} renamed from {old_name} to {new_name}",);
+        jack::Control::Continue
+    }
+
+    fn ports_connected(
+        &mut self,
+        _: &jack::Client,
+        port_id_a: jack::PortId,
+        port_id_b: jack::PortId,
+        are_connected: bool,
+    ) {
+        println!(
+            "JACK: ports with id {} and {} are {}",
+            port_id_a,
+            port_id_b,
+            if are_connected {
+                "connected"
+            } else {
+                "disconnected"
+            }
+        );
+    }
+
+    fn graph_reorder(&mut self, _: &jack::Client) -> jack::Control {
+        println!("JACK: graph reordered");
+        jack::Control::Continue
+    }
+
+    fn xrun(&mut self, _: &jack::Client) -> jack::Control {
+        println!("JACK: xrun occurred");
+        jack::Control::Continue
+    }
+}
+
 /// Deloop's Jack client
 ///
 /// Bridges the gap between user commands and audio processing.
 pub struct Client {
-    jack_session: jack::AsyncClient<(), TrackManager>,
+    jack_session: jack::AsyncClient<Notifications, TrackManager>,
     ports: UnownedPorts,
     command_tx: Sender<TrackCommand>,
     info_rx: Receiver<TrackInfo>,
@@ -85,7 +171,7 @@ impl Client {
 
         let manager = TrackManager::new(&jack_client, command_rx, info_tx, response_tx);
         let ports = manager.get_ports();
-        let jack_session = jack_client.activate_async((), manager).unwrap();
+        let jack_session = jack_client.activate_async(Notifications, manager).unwrap();
 
         Client {
             jack_session,
