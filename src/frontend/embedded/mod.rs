@@ -12,7 +12,7 @@ use crate::deloop;
 const TRACK_A_PIN: u8 = 16;
 const TRACK_B_PIN: u8 = 12;
 
-const ADC_CHANNEL_VOLUME: u8 = 7; // Volume control channel on MCP3008
+const ADC_CHANNEL_VOLUME: u8 = 0; // Volume control channel on MCP3008
 
 /// Macro to set up a GPIO pin for track button input.
 /// Takes a client, pin number, and track ID and sets up the appropriate interrupt handler.
@@ -56,6 +56,10 @@ macro_rules! add_track_interrupt {
 
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let mut client = deloop::Client::default();
+    for sink in client.audio_sinks() {
+        client.publish_to(&sink)?;
+    }
+    client.subscribe_to("fluidsynth")?;
 
     let mut a_btn = Gpio::new()?.get(TRACK_A_PIN)?.into_input_pullup();
     add_track_interrupt!(&mut a_btn, client, deloop::TrackId::A);

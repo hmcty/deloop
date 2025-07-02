@@ -324,7 +324,7 @@ impl Client {
         self.get_clients_from_ports(self.jack_session.as_client().ports(
             None,
             Some(jack::jack_sys::FLOAT_MONO_AUDIO),
-            jack::PortFlags::IS_INPUT,
+            jack::PortFlags::IS_INPUT | jack::PortFlags::IS_PHYSICAL,
         ))
     }
 
@@ -411,7 +411,7 @@ impl Client {
         let jack_client = self.jack_session.as_client();
         let port_names = jack_client.ports(
             Some(regex::escape(sink_name).as_str()),
-            None,
+            Some(jack::jack_sys::FLOAT_MONO_AUDIO),
             jack::PortFlags::IS_INPUT,
         );
         ensure!(!port_names.is_empty(), SinkNotFoundSnafu { sink_name });

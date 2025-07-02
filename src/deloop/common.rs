@@ -14,7 +14,11 @@ impl LabeledPorts {
         for port_name in port_names {
             match port_name.as_str() {
                 _ if port_name.ends_with("_FL") => fl = Some(port_name.clone()),
+                _ if port_name.ends_with("_1") => fl = Some(port_name.clone()),
+                _ if port_name.ends_with("left") => fl = Some(port_name.clone()),
                 _ if port_name.ends_with("_FR") => fr = Some(port_name.clone()),
+                _ if port_name.ends_with("_2") => fr = Some(port_name.clone()),
+                _ if port_name.ends_with("right") => fr = Some(port_name.clone()),
                 _ if port_name.ends_with("_MONO") => mono = Some(port_name.clone()),
                 _ => {}
             }
