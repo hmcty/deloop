@@ -16,3 +16,6 @@
 [submodule "mk0/external/STM32CubeH7"]
 	path = mk0/external/STM32CubeH7
 	url = git@github.com:STMicroelectronics/STM32CubeH7.git
+[submodule "lite/external/libDaisy"]
+	path = lite/external/libDaisy
+	url = git@github.com:electro-smith/libDaisy.git
