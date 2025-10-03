@@ -35,6 +35,8 @@ int main(void) {
   spi_conf.periph =
       SpiHandle::Config::Peripheral::SPI_1; // Use the SPI_1 Peripheral
 
+  spi_conf.baud_prescaler = SpiHandle::Config::BaudPrescaler::PS_16;
+
   // Pins to use. These must be available on the selected peripheral
   spi_conf.pin_config.sclk = seed::D8;  // Use pin D8 as SCLK
   spi_conf.pin_config.miso = Pin();     // We won't need this
@@ -52,24 +54,45 @@ int main(void) {
 
   GC9A01 display = GC9A01(spi_handle, DC, RST);
   display.Init();
-  display.FillScreen(0x0000);
+  display.FillScreen(COLOR_WHITE);
   System::Delay(1000);
+
+  display.FillScreen(COLOR_BLACK);
+  System::Delay(1000);
+
+  // display.FillScreen(0x0000);
   // display.FillScreen(0xAAAAAAAA);
   // System::Delay(1000);
-  display.FillScreen(0x00FF);
+  // display.FillScreen(0x00FF);
+  // System::Delay(1000);
+
+  // display.FillScreen(0xF000);
+  // System::Delay(1000);
+  // display.FillScreen(0x00000000);
+  // System::Delay(1000);
+
+  // display.FillScreen(0xFFFFFFFF);
+  display.DrawRectangle(100, 100, 20, 20, COLOR_RED); // Red rectangle
   System::Delay(1000);
 
-  display.FillScreen(0xF000);
-  System::Delay(1000);
-  display.FillScreen(0x00000000);
+  display.DrawRectangle(20, 20, 100, 100, COLOR_BLUE); // Red rectangle
   System::Delay(1000);
 
-  display.FillScreen(0xFFFFFFFF);
-  display.DrawRectangle(100, 100, 20, 20, 0x0F00); // Red rectangle
+  display.DrawRectangle(50, 30, 100, 100, COLOR_GREEN); // Red rectangle
   System::Delay(1000);
 
-  display.DrawRectangle(100, 100, 20, 20, 0x0000); // Red rectangle
-  display.DrawRectangle(200, 100, 20, 20, 0xF000); // Red rectangle
+  display.DrawRectangle(10, 0, 50, 50, COLOR_RED); // Red rectangle
+  System::Delay(1000);
+
+  display.DrawRectangle(200, 200, 50, 50, COLOR_BLUE); // Red rectangle
+  System::Delay(1000);
+
+  // display.DrawRectangle(120, 0, 100, 0, 0x00F0); // Red rectangle
+  // System::Delay(1000);
+  // display.DrawRectangle(120, 60, 100, 50, 0x00F0); // Red rectangle
+  // System::Delay(1000);
+  // display.DrawRectangle(100, 100, 20, 20, 0x0000); // Red rectangle
+  // display.DrawRectangle(200, 100, 20, 20, 0xF000); // Red rectangle
 
   bool led_state = true;
 

@@ -1,5 +1,11 @@
 #include "daisy_seed.h"
 
+#define COLOR_BLACK ((uint16_t)0x0000)
+#define COLOR_GREEN ((uint16_t)0x07E0)
+#define COLOR_RED ((uint16_t)0xF800)
+#define COLOR_BLUE ((uint16_t)0x001F)
+#define COLOR_WHITE ((uint16_t)0xFFFF)
+
 class GC9A01 {
 public:
   GC9A01(daisy::SpiHandle spi, daisy::GPIO dc, daisy::GPIO rst)

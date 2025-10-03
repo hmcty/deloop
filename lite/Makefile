@@ -2,13 +2,13 @@
 TARGET = Template
 
 # Sources
-C_INCLUDES += -I.
+# C_INCLUDES = -I.
 
 CPP_SOURCES = main.cpp \
   GC9A01.cpp
 
 # Library Locations
-LIBDAISY_DIR = ./external/libDaisy
+LIBDAISY_DIR = external/libDaisy
 # DAISYSP_DIR = @DAISYSP_DIR@
 
 # Core location, and generic Makefile.

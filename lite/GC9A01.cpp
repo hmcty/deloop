@@ -5,7 +5,7 @@
 void GC9A01::Init(void) {
   dc_.Write(true); // Leave in data mode by default
 
-  WriteCommand(0x00); // Put SPI into known state
+  // WriteCommand(0x00); // Put SPI into known state
 
   // Toggle to perform reset
   rst_.Write(true);
@@ -237,6 +237,22 @@ void GC9A01::Init(void) {
   WriteCommand(0x35); // Tearing Effect Line ON
   WriteCommand(0x21); // Display Inversion ON
 
+  WriteCommand(0x36);   // Memory Access Control
+  WriteData8((0 << 7) | // Row Address Order
+             (0 << 6) | // Column Address Order
+             (0 << 5) | // Row/Column Exchange
+             (1 << 4) | // Vertical Refresh Order
+             (1 << 3) | // RGB/BGR Order
+             (0 << 2)); // Horizontal Refresh ORDER
+
+  // WriteCommand(0xE9);
+  // WriteData8(0x00); // Enable 2-data line mode
+
+  WriteCommand(0x51); // Write Brightness
+  WriteData8(0x0F);
+
+  WriteCommand(0x29); // Display ON
+
   WriteCommand(0x11); // Sleep OUT
   daisy::System::Delay(120);
   WriteCommand(0x29); // Display on
@@ -249,8 +265,18 @@ void GC9A01::DrawRectangle(int x, int y, int w, int h, uint16_t color) {
   WriteCommand(0x2B); // PASET?
   WriteData32C(y, y + h - 1);
   WriteCommand(0x2C); // RAMWR
-  for (int i = 0; i < w * h; i++) {
-    WriteData16(color);
+
+  const int chunk_size = 128;
+  int num_pixels = w * h;
+  uint8_t buf[chunk_size * 2];
+  while (num_pixels > 0) {
+    int msg_size = std::min(num_pixels, chunk_size);
+    for (int i = 0; i < msg_size * 2; i += 2) {
+      buf[i] = color >> 8;
+      buf[i + 1] = color & 0xFF;
+    }
+    spi_.BlockingTransmit(buf, msg_size * 2);
+    num_pixels -= msg_size;
   }
 }
 

@@ -5,32 +5,21 @@ project(deloop_lite
   VERSION 1.0.0
   DESCRIPTION "Firmware for the Deloop Lite"
 )
-
 include(external/libDaisy/cmake/toolchains/ArmGNUToolchain.cmake)
-
-# TFT eSPI
-add_library(TFT_eSPI STATIC
-  external/TFT_eSPI/TFT_eSPI.cpp
-)
-
-target_include_directories(TFT_eSPI PUBLIC
-  .
-  external/TFT_eSPI
-)
-
-set_target_properties(TFT_eSPI PROPERTIES
-  CXX_STANDARD 17
-  CXX_STANDARD_REQUIRED YES
-)
 
 # Daisy Application
 set(FIRMWARE_NAME "DELOOP_LITE")
 set(FIRMWARE_SOURCES
   main.cpp
-)
-set(FIRMWARE_EXTRA_LIBS
-  TFT_eSPI
+  GC9A01.cpp
 )
 
+set(DAISY_GENERATE_BIN ON)
 add_subdirectory(external/libDaisy)
 include(DaisyProject)
+
+add_custom_target(flash
+  COMMAND dfu-util -a 0 -s 0x08000000:leave -D ${FIRMWARE_NAME}.bin -d ,0483:df11
+  DEPENDS ${FIRMWARE_NAME}
+  COMMENT "Flashing via dfu-util"
+)
