@@ -19,3 +19,6 @@
 [submodule "lite/external/libDaisy"]
 	path = lite/external/libDaisy
 	url = git@github.com:electro-smith/libDaisy.git
+[submodule "lite/external/lvgl"]
+	path = lite/external/lvgl
+	url = git@github.com:lvgl/lvgl.git

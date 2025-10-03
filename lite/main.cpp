@@ -87,6 +87,8 @@ int main(void) {
   display.DrawRectangle(200, 200, 50, 50, COLOR_BLUE); // Red rectangle
   System::Delay(1000);
 
+  display.FillScreen(COLOR_BLACK);
+
   // display.DrawRectangle(120, 0, 100, 0, 0x00F0); // Red rectangle
   // System::Delay(1000);
   // display.DrawRectangle(120, 60, 100, 50, 0x00F0); // Red rectangle
