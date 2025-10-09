@@ -2,17 +2,21 @@
 
 #include "GC9A01.hpp"
 
-void GC9A01::Init(void) {
-  dc_.Write(true); // Leave in data mode by default
+void GC9A01::Init(daisy::SpiHandle *spi, daisy::GPIO *dc, daisy::GPIO *rst) {
+  spi_ = spi;
+  dc_ = dc;
+  rst_ = rst;
+
+  dc_->Write(true); // Leave in data mode by default
 
   // WriteCommand(0x00); // Put SPI into known state
 
   // Toggle to perform reset
-  rst_.Write(true);
+  rst_->Write(true);
   daisy::System::Delay(5);
-  rst_.Write(false);
+  rst_->Write(false);
   daisy::System::Delay(20);
-  rst_.Write(true);
+  rst_->Write(true);
 
   WriteCommand(0xEF);
   WriteCommand(0xEB);
@@ -260,11 +264,7 @@ void GC9A01::Init(void) {
 }
 
 void GC9A01::DrawRectangle(int x, int y, int w, int h, uint16_t color) {
-  WriteCommand(0x2A); // CASET?
-  WriteData32C(x, x + w - 1);
-  WriteCommand(0x2B); // PASET?
-  WriteData32C(y, y + h - 1);
-  WriteCommand(0x2C); // RAMWR
+  SetDrawWindow(x, y, w, h);
 
   const int chunk_size = 128;
   int num_pixels = w * h;
@@ -275,9 +275,22 @@ void GC9A01::DrawRectangle(int x, int y, int w, int h, uint16_t color) {
       buf[i] = color >> 8;
       buf[i + 1] = color & 0xFF;
     }
-    spi_.BlockingTransmit(buf, msg_size * 2);
+    spi_->BlockingTransmit(buf, msg_size * 2);
     num_pixels -= msg_size;
   }
+}
+
+void GC9A01::SetDrawWindow(int x, int y, int w, int h) {
+  WriteCommand(0x2A); // CASET?
+  WriteData32C(x, x + w - 1);
+  WriteCommand(0x2B); // PASET?
+  WriteData32C(y, y + h - 1);
+}
+
+void GC9A01::DrawBitmap(uint8_t *px_map, size_t size) {
+  WriteCommand(0x2C); // RAMWR
+  // spi_->DmaTransmit(px_map, size * 2, nullptr, nullptr, nullptr);
+  spi_->BlockingTransmit(px_map, size * 2);
 }
 
 void GC9A01::FillScreen(uint16_t color) {
