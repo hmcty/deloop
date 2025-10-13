@@ -30,33 +30,38 @@ SpiHandle::Config default_spi_config() {
   return spi_conf;
 }
 
-void audio_callback(daisy::AudioHandle::InputBuffer in,
-                    daisy::AudioHandle::OutputBuffer out, size_t size) {}
+void audio_callback(daisy::AudioHandle::InterleavingInputBuffer in,
+                    daisy::AudioHandle::InterleavingOutputBuffer out,
+                    size_t size) {
+  dlp_engine_process_audio(in, out, size);
+}
 
 int main(void) {
   hw.Init();
+  hw.StartLog(true);
 
-  deloop_engine_init();
-
-  // Configure audio
-  // hw.StartAudio(audio_callback);
+  // Start processing audio
+  dlp_engine_init();
+  hw.StartAudio(audio_callback);
 
   // Configure display
-  DC.Init(seed::D11, GPIO::Mode::OUTPUT, GPIO::Pull::NOPULL,
-          GPIO::Speed::VERY_HIGH);
-  RST.Init(seed::D12, GPIO::Mode::OUTPUT, GPIO::Pull::PULLUP,
-           GPIO::Speed::MEDIUM);
-  spi_handle.Init(default_spi_config());
-  setup_display(&spi_handle, &DC, &RST);
+  // DC.Init(seed::D11, GPIO::Mode::OUTPUT, GPIO::Pull::NOPULL,
+  //         GPIO::Speed::VERY_HIGH);
+  // RST.Init(seed::D12, GPIO::Mode::OUTPUT, GPIO::Pull::PULLUP,
+  //          GPIO::Speed::MEDIUM);
+  // spi_handle.Init(default_spi_config());
+  // setup_display(&spi_handle, &DC, &RST);
 
+  uint32_t last = System::GetNow();
   bool led_state = true;
   while (1) {
-    hw.SetLed(led_state);
-    led_state = !led_state;
-    display_tick();
-    deloop_track_tick();
+    if (System::GetNow() - last > 100) {
+      last = System::GetNow();
+      hw.SetLed(led_state);
+      led_state = !led_state;
+    }
+    // display_tick();
 
-    // wait 5 ms
     System::Delay(5);
   }
 }

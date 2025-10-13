@@ -1,48 +1,51 @@
-#ifndef DELOOP_TRACK_H
-#define DELOOP_TRACK_H
+#ifndef DLP_TRACK_H
+#define DLP_TRACK_H
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
+#include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
-#define DELOOP_MAX_TRACKS ((uint8_t)2)
+#include "error.h"
 
-typedef enum deloop_track_id {
-  DELOOP_TRACK_A = 0,
-  DELOOP_TRACK_B,
-} deloop_track_id_t;
+typedef enum dlp_track_id {
+  DLP_TRACK_A = 0,
+  DLP_TRACK_B,
+  DLP_NUM_TRACKS,
+} dlp_track_id_t;
 
 // SETTINGS --------------------------------------
-typedef enum deloop_sync_mode {
-  DELOOP_SYNC_MASTER = 0,
-  DELOOP_SYNC_SLAVE,
-} deloop_sync_mode_t;
+typedef enum dlp_sync_mode {
+  DLP_SYNC_MASTER = 0,
+  DLP_SYNC_SLAVE,
+} dlp_sync_mode_t;
 
-typedef struct deloop_sync_settings {
-  deloop_sync_mode_t mode;
-  deloop_track_id_t track_id; // Only valid if mode is SLAVE
-} deloop_sync_settings_t;
+typedef struct dlp_sync_settings {
+  dlp_sync_mode_t mode;
+  dlp_track_id_t track_id; // Only valid if mode is SLAVE
+} dlp_sync_settings_t;
 
 // STATUS ---------------------------------------
-typedef enum deloop_track_state_type {
-  DELOOP_TRACK_STATE_IDLE = 0,
-  DELOOP_TRACK_STATE_RECORDING_START_QUEUED,
-  DELOOP_TRACK_STATE_RECORDING,
-  DELOOP_TRACK_STATE_RECORDING_STOP_QUEUED,
-  DELOOP_TRACK_STATE_PLAYING_START_QUEUED,
-  DELOOP_TRACK_STATE_PLAYING,
-  DELOOP_TRACK_STATE_PAUSED,
-} deloop_track_state_type_t;
+typedef enum dlp_track_state_type {
+  DLP_TRACK_STATE_IDLE = 0,
+  DLP_TRACK_STATE_RECORDING_START_QUEUED,
+  DLP_TRACK_STATE_RECORDING,
+  DLP_TRACK_STATE_RECORDING_STOP_QUEUED,
+  DLP_TRACK_STATE_PLAYING_START_QUEUED,
+  DLP_TRACK_STATE_PLAYING,
+  DLP_TRACK_STATE_PAUSED,
+} dlp_track_state_type_t;
 
 // API ------------------------------------------
-typedef struct deloop_track {
-  const deloop_track_id_t id;
-  deloop_sync_settings_t sync;
+typedef struct dlp_track {
+  const dlp_track_id_t id;
+  dlp_sync_settings_t sync;
 
   // State machine
-  deloop_track_state_type_t state;
+  dlp_track_state_type_t state;
   uint64_t queued_tick; // Only valid if state is `*_QUEUED`
   bool overdub_enabled;
   float volume; // 0.0 to 1.0
@@ -51,18 +54,18 @@ typedef struct deloop_track {
   size_t read_head;
   size_t write_head;
   size_t len;
-  const float *buffer;
+  float *const buffer;
   const size_t capacity;
-} deloop_track_t;
+} dlp_track_t;
 
-void deloop_track_init(deloop_track_t *track);
-void deloop_track_advance_state(deloop_track_t *track);
-void deloop_track_read(deloop_track_t *track, const float *in, size_t nframes);
-void deloop_track_write(deloop_track_t *track, float *out, size_t nframes);
-void deloop_track_clear(deloop_track_t *track);
+dlp_error_t dlp_track_init(dlp_track_t *track);
+void dlp_track_advance_state(dlp_track_t *track);
+void dlp_track_read(dlp_track_t *track, const float *in, size_t nframes);
+void dlp_track_write(dlp_track_t *track, float *out, size_t nframes);
+void dlp_track_clear(dlp_track_t *track);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif // DELOOP_TRACK_H
+#endif // DLP_TRACK_H

@@ -17,6 +17,9 @@ set(FIRMWARE_SOURCES
   src/GC9A01.cpp
   src/display.cpp
   src/track.c
+  src/engine.c
+  src/ringbuf.c
+  src/counter.c
 )
 
 set(DAISY_STORAGE qspi)
@@ -35,9 +38,8 @@ add_custom_target(dfu_app
   COMMENT "Flashing external storage via dfu-util"
 )
 
-set(DAISY_QSPI_BOOTLOADER ${LIBDAISY_DIR}/core/dsy_bootloader_v6_3_extdfu-2000ms.bin)
-add_custom_target(dfu_qspi_bootloader
+set(DAISY_QSPI_BOOTLOADER ${LIBDAISY_DIR}/core/dsy_bootloader_v6_3-intdfu-2000ms.bin)
+add_custom_target(dfu_bootloader
   COMMAND dfu-util -a 0 -s 0x08000000:leave -D ${DAISY_QSPI_BOOTLOADER} -d ,0483:df11
-  DEPENDS ${FIRMWARE_NAME}
   COMMENT "Flashing bootloader to internal storage via dfu-util"
 )
