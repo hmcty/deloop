@@ -157,6 +157,16 @@ void dlp_track_write(dlp_track_t *track, float *out, size_t nframes) {
   track->write_head = track->read_head;
 }
 
+dlp_error_t dlp_track_sync_to(dlp_track_t *track, dlp_track_id_t master) {
+  if (track == NULL || master >= DLP_NUM_TRACKS || track->id == master) {
+    return DLP_ERROR_INVALID_ARGUMENT;
+  }
+
+  track->sync.mode = DLP_SYNC_SLAVE;
+  track->sync.track_id = master;
+  return DLP_SUCCESS;
+}
+
 void dlp_track_clear(dlp_track_t *track) {
   if (track == NULL) {
     return;
@@ -176,6 +186,8 @@ static inline dlp_track_id_t sync_counter(dlp_track_t *track) {
     return track->id;
   case DLP_SYNC_SLAVE:
     return track->sync.track_id;
+  default:
+    return track->id;
   }
 }
 

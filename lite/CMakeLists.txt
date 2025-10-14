@@ -6,20 +6,25 @@ project(deloop_lite
   DESCRIPTION "Firmware for the Deloop Lite"
 )
 
+# GoogleTest
+if (BUILD_TESTS)
+  set(BUILD_GMOCK OFF)
+  add_subdirectory(${CMAKE_SOURCE_DIR}/external/googletest)
+  enable_testing()
+endif()
+
 # LVGL
 set(LV_BUILD_CONF_DIR ${PROJECT_SOURCE_DIR}/include CACHE PATH "Path to LVGL build configuration directory")
 add_subdirectory(external/lvgl)
+
+# libdlp
+add_subdirectory(../libdlp libdlp_build)
 
 # Daisy Application
 set(FIRMWARE_NAME "${PROJECT_NAME}")
 set(FIRMWARE_SOURCES
   src/main.cpp
   src/GC9A01.cpp
-  src/display.cpp
-  src/track.c
-  src/engine.c
-  src/ringbuf.c
-  src/counter.c
 )
 
 set(DAISY_STORAGE qspi)
@@ -29,7 +34,7 @@ add_subdirectory(${LIBDAISY_DIR})
 include(DaisyProject)
 
 target_include_directories(${FIRMWARE_NAME} PRIVATE ${CMAKE_CURRENT_LIST_DIR}/include)
-target_link_libraries(${FIRMWARE_NAME} PRIVATE lvgl)
+target_link_libraries(${FIRMWARE_NAME} PRIVATE lvgl libdlp)
 
 # Custom targets to flash via dfu-util
 add_custom_target(dfu_app

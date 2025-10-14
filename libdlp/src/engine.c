@@ -104,6 +104,8 @@ dlp_error_t dlp_engine_process_audio(const float *const in, float *const out,
     case DLP_ENGINE_CMD_CLEAR:
       dlp_track_clear(&state_.tracks[cmd.track_id]);
       break;
+    default:
+      // Unknown command
     }
 
     dlp_engine_response_t resp = {

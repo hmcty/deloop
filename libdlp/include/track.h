@@ -62,6 +62,7 @@ dlp_error_t dlp_track_init(dlp_track_t *track);
 void dlp_track_advance_state(dlp_track_t *track);
 void dlp_track_read(dlp_track_t *track, const float *in, size_t nframes);
 void dlp_track_write(dlp_track_t *track, float *out, size_t nframes);
+dlp_error_t dlp_track_sync_to(dlp_track_t *track, dlp_track_id_t master);
 void dlp_track_clear(dlp_track_t *track);
 
 #ifdef __cplusplus

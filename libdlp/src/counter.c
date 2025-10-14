@@ -8,7 +8,7 @@ static struct {
   dlp_counter_t track_cntrs[DLP_NUM_TRACKS];
 } state_;
 
-dlp_error_t dlp_counter_init(uint64_t rate) {
+dlp_error_t dlp_counter_init(void) {
   if (state_.initialized) {
     return DLP_ERROR_ALREADY_INITIALIZED;
   }
@@ -19,6 +19,15 @@ dlp_error_t dlp_counter_init(uint64_t rate) {
   }
 
   state_.initialized = true;
+  return DLP_SUCCESS;
+}
+
+dlp_error_t dlp_counter_deinit(void) {
+  if (!state_.initialized) {
+    return DLP_ERROR_NOT_INITIALIZED;
+  }
+
+  state_.initialized = false;
   return DLP_SUCCESS;
 }
 
@@ -59,8 +68,8 @@ uint64_t dlp_counter_next_loop(dlp_track_id_t id) {
     return cnt;
   }
 
-  return ((cnt / len) + 1) * len;
-  // return (len - (cnt % len)) + cnt;
+  // return ((cnt / len) + 1) * len;
+  return (len - (cnt % len)) + cnt;
 }
 
 void dlp_counter_set_cnt(dlp_track_id_t id, uint64_t val) {
