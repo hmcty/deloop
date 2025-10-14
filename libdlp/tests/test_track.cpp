@@ -7,11 +7,6 @@
 #include "error.h"
 #include "track.h"
 
-void SetUpTestSuite() {
-  dlp_counter_deinit();
-  ASSERT_EQ(dlp_counter_init(), DLP_SUCCESS);
-}
-
 void AssertDefaults(const dlp_track_t *track) {
   ASSERT_EQ(track->state, DLP_TRACK_STATE_IDLE);
   ASSERT_EQ(track->read_head, 0);

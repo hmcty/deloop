@@ -12,15 +12,19 @@ target_compile_options(dlp PRIVATE
   -Werror
 )
 
-if(BUILD_TESTS)
-  add_executable(test_track tests/test_track.cpp)
-  target_link_libraries(test_track
+macro(dlp_unit_test name)
+  add_executable(${name} tests/${name}.cpp)
+  target_link_libraries(${name}
   PRIVATE
     GTest::gtest_main
     dlp
   )
-  add_test(NAME test_track COMMAND test_track)
+  add_test(NAME ${name} COMMAND ${name})
+  add_dependencies(all_tests ${name})
+endmacro()
 
-  # Add target for all tests
-  add_custom_target(tests ALL DEPENDS test_track)
+if(BUILD_TESTS)
+  add_custom_target(all_tests)
+  dlp_unit_test(test_counter)
+  dlp_unit_test(test_track)
 endif()
