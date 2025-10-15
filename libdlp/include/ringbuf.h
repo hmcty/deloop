@@ -13,6 +13,8 @@ typedef struct dlp_ringbuf {
   void *const data;
   const size_t item_size;
   const size_t capacity;
+  // atomic_size_t write;
+  // atomic_size_t read;
   size_t write;
   size_t read;
 } dlp_ringbuf_t;
