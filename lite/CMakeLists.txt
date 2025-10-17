@@ -34,7 +34,7 @@ add_subdirectory(${LIBDAISY_DIR})
 include(DaisyProject)
 
 target_include_directories(${FIRMWARE_NAME} PRIVATE ${CMAKE_CURRENT_LIST_DIR}/include)
-target_link_libraries(${FIRMWARE_NAME} PRIVATE lvgl libdlp)
+target_link_libraries(${FIRMWARE_NAME} PRIVATE lvgl dlp)
 
 # Custom targets to flash via dfu-util
 add_custom_target(dfu_app

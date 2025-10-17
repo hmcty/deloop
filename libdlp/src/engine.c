@@ -11,7 +11,7 @@
 #include "ringbuf.h"
 #include "track.h"
 
-#define AUDIO_BUFFER_CAPACITY (48000 * 30 * 2) // 30 seconds at 48kHz
+#define AUDIO_BUFFER_CAPACITY (48000 * 2 * 60) // 90 seconds at 48kHz
 #define CMD_RESP_BUFFER_CAPACITY (8)
 
 static float __attribute__((section(
@@ -28,11 +28,11 @@ static struct {
     .initialized = false,
     .tracks = {{.id = DLP_TRACK_A,
                 .buffer = &audio_buffers[DLP_TRACK_A][0],
-                .capacity = CMD_RESP_BUFFER_CAPACITY},
+                .capacity = AUDIO_BUFFER_CAPACITY},
                {
                    .id = DLP_TRACK_B,
                    .buffer = &audio_buffers[DLP_TRACK_B][0],
-                   .capacity = CMD_RESP_BUFFER_CAPACITY,
+                   .capacity = AUDIO_BUFFER_CAPACITY,
                }},
     .cmd_rb = {.data = &cmd_buf,
                .item_size = sizeof(dlp_engine_command_t),
@@ -115,7 +115,7 @@ dlp_error_t dlp_engine_process_audio(const float *const in, float *const out,
     dlp_ringbuf_push(&state_.resp_rb, &resp);
   }
 
-  memset(out, 0, nframes * sizeof(float));
+  memcpy(out, in, nframes * sizeof(float));
   for (size_t i = 0; i < DLP_NUM_TRACKS; i++) {
     dlp_track_read(&state_.tracks[i], in, nframes);
     dlp_track_write(&state_.tracks[i], out, nframes);
