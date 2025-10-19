@@ -1,5 +1,8 @@
 #include <daisy_seed.h>
-#include <lvgl.h>
+
+#ifdef DLP_DAISYSP
+#include <daisysp.h>
+#endif
 
 #include "display.hpp"
 #include "engine.h"
@@ -10,15 +13,23 @@ constexpr size_t kAudioBlockSize = 48;
 constexpr size_t kAudioBufferSize = kAudioBlockSize * 2;
 
 static DaisySeed hw;
-static GPIO DC;
-static GPIO RST;
 static GPIO FOOTSW_A;
 static GPIO FOOTSW_B;
 static GPIO FOOTSW_C;
+
+#ifndef DLP_HEADLESS
+static GPIO DC;
+static GPIO RST;
 static SpiHandle spi_handle;
+#endif
 
 static float input_gain = 1.0f;
 static float gain_buffer[kAudioBufferSize];
+
+#ifdef DLP_DAISYSP
+static daisysp::SquareNoise osc;
+static float phase = 0.0f;
+#endif
 
 SpiHandle::Config default_spi_config() {
   SpiHandle::Config spi_conf;
@@ -47,38 +58,53 @@ void audio_callback(daisy::AudioHandle::InterleavingInputBuffer in,
     return;
   }
 
+#ifdef DLP_DAISYSP
+  for (size_t i = 0; i < size; i++) {
+  }
+#else
   for (size_t i = 0; i < size; i++) {
     gain_buffer[i] = in[i] * input_gain;
   }
 
   dlp_engine_process_audio(gain_buffer, out, size);
+#endif // DLP_DAISYSP
 
   for (size_t i = 0; i < size; i++) {
     out[i] = fmaxf(fminf(out[i], 1.0f), -1.0f);
   }
 }
 
+void footswitch_released(
+
 int main(void) {
   hw.Init();
   hw.StartLog();
 
-  // Start processing audio
-  dlp_engine_init();
   hw.SetAudioBlockSize(kAudioBlockSize);
   hw.SetAudioSampleRate(SaiHandle::Config::SampleRate::SAI_48KHZ);
+
+#ifdef DLP_DAISYSP
+  // Initialize DaisySP components
+
+#else
+  dlp_engine_init();
+#endif // DLP_DAISYSP
+
   hw.StartAudio(audio_callback);
 
   FOOTSW_A.Init(seed::D23, GPIO::Mode::INPUT, GPIO::Pull::PULLUP);
   FOOTSW_B.Init(seed::D22, GPIO::Mode::INPUT, GPIO::Pull::PULLUP);
   FOOTSW_C.Init(seed::D21, GPIO::Mode::INPUT, GPIO::Pull::PULLUP);
 
+#ifndef DLP_HEADLESS
   // Configure display
-  // DC.Init(seed::D11, GPIO::Mode::OUTPUT, GPIO::Pull::NOPULL,
-  //         GPIO::Speed::VERY_HIGH);
-  // RST.Init(seed::D12, GPIO::Mode::OUTPUT, GPIO::Pull::PULLUP,
-  //          GPIO::Speed::MEDIUM);
-  // spi_handle.Init(default_spi_config());
-  // setup_display(&spi_handle, &DC, &RST);
+  DC.Init(seed::D11, GPIO::Mode::OUTPUT, GPIO::Pull::NOPULL,
+          GPIO::Speed::VERY_HIGH);
+  RST.Init(seed::D12, GPIO::Mode::OUTPUT, GPIO::Pull::PULLUP,
+           GPIO::Speed::MEDIUM);
+  spi_handle.Init(default_spi_config());
+  setup_display(&spi_handle, &DC, &RST);
+#endif
 
   uint32_t last = System::GetNow();
   bool led_state = true;
@@ -131,7 +157,9 @@ int main(void) {
       }
     }
 
-    // display_tick();
+#ifndef DLP_HEADLESS
+    display_tick();
+#endif
 
     System::Delay(10);
   }

@@ -14,8 +14,12 @@ if (BUILD_TESTS)
 endif()
 
 # LVGL
-set(LV_BUILD_CONF_DIR ${PROJECT_SOURCE_DIR}/include CACHE PATH "Path to LVGL build configuration directory")
-add_subdirectory(external/lvgl)
+if (NOT DLP_HEADLESS)
+  set(LV_BUILD_CONF_DIR
+    ${PROJECT_SOURCE_DIR}/include
+    CACHE PATH "Path to LVGL build configuration directory")
+  add_subdirectory(external/lvgl)
+endif()
 
 # libdlp
 add_subdirectory(../libdlp libdlp_build)
@@ -24,8 +28,19 @@ add_subdirectory(../libdlp libdlp_build)
 set(FIRMWARE_NAME "${PROJECT_NAME}")
 set(FIRMWARE_SOURCES
   src/main.cpp
-  src/GC9A01.cpp
 )
+if (NOT DLP_HEADLESS)
+  list(APPEND FIRMWARE_SOURCES
+    src/GC9A01.cpp
+    src/display.cpp
+  )
+endif()
+
+if (DLP_DAISYSP)
+  set(DAISYSP_DIR ${CMAKE_CURRENT_LIST_DIR}/external/DaisySP)
+  add_subdirectory(${DAISYSP_DIR} DaisySP)
+  set(DAISYSP_LIB DaisySP)
+endif()
 
 set(DAISY_STORAGE qspi)
 set(DAISY_GENERATE_BIN ON)
@@ -34,7 +49,16 @@ add_subdirectory(${LIBDAISY_DIR})
 include(DaisyProject)
 
 target_include_directories(${FIRMWARE_NAME} PRIVATE ${CMAKE_CURRENT_LIST_DIR}/include)
-target_link_libraries(${FIRMWARE_NAME} PRIVATE lvgl dlp)
+target_link_libraries(${FIRMWARE_NAME} PRIVATE dlp)
+if (NOT DLP_HEADLESS)
+  target_link_libraries(${FIRMWARE_NAME} PRIVATE lvgl)
+else()
+  target_compile_definitions(${FIRMWARE_NAME} PRIVATE DLP_HEADLESS)
+endif()
+
+if (DLP_DAISYSP)
+  target_compile_definitions(${FIRMWARE_NAME} PRIVATE DLP_DAISYSP)
+endif()
 
 # Custom targets to flash via dfu-util
 add_custom_target(dfu_app
