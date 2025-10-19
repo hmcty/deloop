@@ -104,6 +104,11 @@ dlp_error_t dlp_engine_process_audio(const float *const in, float *const out,
     case DLP_ENGINE_CMD_CLEAR:
       dlp_track_clear(&state_.tracks[cmd.track_id]);
       break;
+    case DLP_ENGINE_CMD_STOP_ALL:
+      for (size_t i = 0; i < DLP_NUM_TRACKS; i++) {
+        state_.tracks[i].state = DLP_TRACK_STATE_PAUSED;
+      }
+      break;
     default:
       // Unknown command
     }

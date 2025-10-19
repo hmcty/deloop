@@ -17,7 +17,7 @@ static GPIO FOOTSW_B;
 static GPIO FOOTSW_C;
 static SpiHandle spi_handle;
 
-static float input_gain = 10.0f;
+static float input_gain = 1.0f;
 static float gain_buffer[kAudioBufferSize];
 
 SpiHandle::Config default_spi_config() {
@@ -112,7 +112,12 @@ int main(void) {
 
     if (FOOTSW_B.Read() != footsw_b_last) {
       footsw_b_last = FOOTSW_B.Read();
-      hw.PrintLine("Footswitch B: %d", !footsw_b_last);
+      if (footsw_b_last) {
+        dlp_engine_command_t cmd = {
+            .cmd_type = DLP_ENGINE_CMD_STOP_ALL,
+        };
+        dlp_engine_send_command(&cmd);
+      }
     }
 
     if (FOOTSW_C.Read() != footsw_c_last) {

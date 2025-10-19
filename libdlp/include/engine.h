@@ -21,6 +21,7 @@ typedef enum dlp_engine_command_type {
   DLP_ENGINE_CMD_PAUSE,
   DLP_ENGINE_CMD_CLEAR,
   DLP_ENGINE_CMD_CONFIGURE,
+  DLP_ENGINE_CMD_STOP_ALL,
 } dlp_engine_command_type_t;
 
 typedef struct dlp_engine_command {
