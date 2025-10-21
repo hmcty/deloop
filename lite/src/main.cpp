@@ -13,9 +13,9 @@ constexpr size_t kAudioBlockSize = 48;
 constexpr size_t kAudioBufferSize = kAudioBlockSize * 2;
 
 static DaisySeed hw;
-static GPIO FOOTSW_A;
-static GPIO FOOTSW_B;
-static GPIO FOOTSW_C;
+static Switch FOOTSW_A;
+static Switch FOOTSW_B;
+static Switch FOOTSW_C;
 
 #ifndef DLP_HEADLESS
 static GPIO DC;
@@ -83,6 +83,15 @@ int main(void) {
   hw.SetAudioBlockSize(kAudioBlockSize);
   hw.SetAudioSampleRate(SaiHandle::Config::SampleRate::SAI_48KHZ);
 
+  float update_rate =
+      hw.AudioSampleRate() / static_cast<float>(kAudioBlockSize);
+  FOOTSW_A.Init(seed::D23, update_rate);
+  FOOTSW_B.Init(seed::D22, update_rate);
+  FOOTSW_C.Init(seed::D21, update_rate);
+  // FOOTSW_A.Init(seed::D23, GPIO::Mode::INPUT, GPIO::Pull::PULLUP);
+  // FOOTSW_B.Init(seed::D22, GPIO::Mode::INPUT, GPIO::Pull::PULLUP);
+  // FOOTSW_C.Init(seed::D21, GPIO::Mode::INPUT, GPIO::Pull::PULLUP);
+
 #ifdef DLP_DAISYSP
   // Initialize DaisySP components
 
@@ -91,10 +100,6 @@ int main(void) {
 #endif // DLP_DAISYSP
 
   hw.StartAudio(audio_callback);
-
-  FOOTSW_A.Init(seed::D23, GPIO::Mode::INPUT, GPIO::Pull::PULLUP);
-  FOOTSW_B.Init(seed::D22, GPIO::Mode::INPUT, GPIO::Pull::PULLUP);
-  FOOTSW_C.Init(seed::D21, GPIO::Mode::INPUT, GPIO::Pull::PULLUP);
 
 #ifndef DLP_HEADLESS
   // Configure display
@@ -109,9 +114,9 @@ int main(void) {
   uint32_t last = System::GetNow();
   bool led_state = true;
 
-  bool footsw_a_last = true;
-  bool footsw_b_last = true;
-  bool footsw_c_last = true;
+  // bool footsw_a_last = true;
+  // bool footsw_b_last = true;
+  // bool footsw_c_last = true;
   while (1) {
     if (System::GetNow() - last > 500) {
       last = System::GetNow();
