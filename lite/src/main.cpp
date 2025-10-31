@@ -1,9 +1,11 @@
 #include <daisy_seed.h>
+#include <ratio>
 
 #ifdef DLP_DAISYSP
 #include <daisysp.h>
 #endif
 
+#include "WS2812B.hpp"
 #include "display.hpp"
 #include "engine.h"
 
@@ -12,10 +14,17 @@ using namespace daisy;
 constexpr size_t kAudioBlockSize = 48;
 constexpr size_t kAudioBufferSize = kAudioBlockSize * 2;
 
-static DaisySeed hw;
-static Switch FOOTSW_A;
-static Switch FOOTSW_B;
-static Switch FOOTSW_C;
+DaisySeed hw;
+// static Switch FOOTSW_A;
+// static Switch FOOTSW_B;
+// static Switch FOOTSW_C;
+static GPIO FOOTSW_A;
+static GPIO FOOTSW_B;
+static GPIO FOOTSW_C;
+
+static PWMHandle led_pwm;
+constexpr size_t kNumLeds = 16;
+static WS2812B<kNumLeds> led_strip;
 
 #ifndef DLP_HEADLESS
 static GPIO DC;
@@ -74,24 +83,48 @@ void audio_callback(daisy::AudioHandle::InterleavingInputBuffer in,
   }
 }
 
-void footswitch_released(
-
 int main(void) {
   hw.Init();
-  hw.StartLog();
+  hw.StartLog(false);
+  hw.PrintLine("Hello\n");
 
   hw.SetAudioBlockSize(kAudioBlockSize);
   hw.SetAudioSampleRate(SaiHandle::Config::SampleRate::SAI_48KHZ);
 
   float update_rate =
       hw.AudioSampleRate() / static_cast<float>(kAudioBlockSize);
-  FOOTSW_A.Init(seed::D23, update_rate);
-  FOOTSW_B.Init(seed::D22, update_rate);
-  FOOTSW_C.Init(seed::D21, update_rate);
-  // FOOTSW_A.Init(seed::D23, GPIO::Mode::INPUT, GPIO::Pull::PULLUP);
-  // FOOTSW_B.Init(seed::D22, GPIO::Mode::INPUT, GPIO::Pull::PULLUP);
-  // FOOTSW_C.Init(seed::D21, GPIO::Mode::INPUT, GPIO::Pull::PULLUP);
+  // FOOTSW_A.Init(seed::D23, update_rate);
+  // FOOTSW_B.Init(seed::D22, update_rate);
+  // FOOTSW_C.Init(seed::D21, update_rate);
+  FOOTSW_A.Init(seed::D23, GPIO::Mode::INPUT, GPIO::Pull::PULLUP);
+  FOOTSW_B.Init(seed::D22, GPIO::Mode::INPUT, GPIO::Pull::PULLUP);
+  FOOTSW_C.Init(seed::D21, GPIO::Mode::INPUT, GPIO::Pull::PULLUP);
 
+  uint32_t prescaler = 0;
+  auto config =
+      PWMHandle::Config(PWMHandle::Config::Peripheral::TIM_5,
+                        prescaler, // prescaler
+                        249        // period (at 200MHz, gives 800KHz PWM freq)
+      );
+  auto result = led_pwm.Init(config);
+
+  PWMHandle::Channel::Config channel_config;
+  channel_config.pin = seed::D16;
+  auto led_channel = led_pwm.Channel4();
+  result = led_channel.Init(channel_config);
+
+  uint32_t tim5_clk = (System::GetPClk1Freq() * 2) / (prescaler + 1);
+
+  hw.PrintLine("TIM5 clock: %u Hz, %u", tim5_clk, prescaler);
+
+  // led_channel.Set(0.5f); // 50% brightness
+  led_strip.Init(&led_channel);
+  for (size_t i = 0; i < kNumLeds; i++) {
+    led_strip.SetPixelColor(i, 10, 10, 10);
+  }
+  led_strip.Render();
+  // System::Delay(100);
+  // led_strip.Render();
 #ifdef DLP_DAISYSP
   // Initialize DaisySP components
 
@@ -114,9 +147,9 @@ int main(void) {
   uint32_t last = System::GetNow();
   bool led_state = true;
 
-  // bool footsw_a_last = true;
-  // bool footsw_b_last = true;
-  // bool footsw_c_last = true;
+  bool footsw_a_last = true;
+  bool footsw_b_last = true;
+  bool footsw_c_last = true;
   while (1) {
     if (System::GetNow() - last > 500) {
       last = System::GetNow();

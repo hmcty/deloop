@@ -28,6 +28,7 @@ add_subdirectory(../libdlp libdlp_build)
 set(FIRMWARE_NAME "${PROJECT_NAME}")
 set(FIRMWARE_SOURCES
   src/main.cpp
+  src/WS2812B.cpp
 )
 if (NOT DLP_HEADLESS)
   list(APPEND FIRMWARE_SOURCES
