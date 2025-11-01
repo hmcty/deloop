@@ -13,6 +13,13 @@ template <uint16_t N> void WS2812B<N>::Init(PWMHandle::Channel *pwm_channel) {
 }
 
 template <uint16_t N>
+void WS2812B<N>::FillColor(uint8_t red, uint8_t green, uint8_t blue) {
+  for (size_t i = 0; i < N; i++) {
+    SetPixelColor(i, red, green, blue);
+  }
+}
+
+template <uint16_t N>
 void WS2812B<N>::SetPixelColor(size_t index, uint8_t red, uint8_t green,
                                uint8_t blue) {
   if (index >= N) {
@@ -38,7 +45,7 @@ template <uint16_t N> void WS2812B<N>::Render() {
                           kBufferSize * sizeof(uint32_t));
   // dsy_dma_clear_cache_for_buffer((uint8_t *)data_buf_,
   //                                kBufferSize * sizeof(uint32_t));
-  pwm_channel_->DmaTransmit(data_buf_, kBufferSize, nullptr, nullptr, nullptr);
+  pwm_channel_->TransmitDma(data_buf_, kBufferSize, nullptr, nullptr);
 }
 
 template class WS2812B<2>;

@@ -85,7 +85,7 @@ void audio_callback(daisy::AudioHandle::InterleavingInputBuffer in,
 
 int main(void) {
   hw.Init();
-  hw.StartLog(false);
+  hw.StartLog(true);
   hw.PrintLine("Hello\n");
 
   hw.SetAudioBlockSize(kAudioBlockSize);
@@ -119,9 +119,10 @@ int main(void) {
 
   // led_channel.Set(0.5f); // 50% brightness
   led_strip.Init(&led_channel);
-  for (size_t i = 0; i < kNumLeds; i++) {
-    led_strip.SetPixelColor(i, 10, 10, 10);
-  }
+
+  int active_led = 0;
+  led_strip.FillColor(0, 0, 0);
+  led_strip.SetPixelColor(active_led, 15, 0, 0);
   led_strip.Render();
   // System::Delay(100);
   // led_strip.Render();
@@ -155,6 +156,11 @@ int main(void) {
       last = System::GetNow();
       hw.SetLed(led_state);
       led_state = !led_state;
+
+      led_strip.SetPixelColor(active_led, 0, 0, 0);
+      active_led = (active_led + 1) % kNumLeds;
+      led_strip.SetPixelColor(active_led, 15, 0, 0);
+      led_strip.Render();
     }
 
     dlp_engine_response_t resp;

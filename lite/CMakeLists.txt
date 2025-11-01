@@ -46,6 +46,7 @@ endif()
 set(DAISY_STORAGE qspi)
 set(DAISY_GENERATE_BIN ON)
 set(LIBDAISY_DIR ${CMAKE_CURRENT_LIST_DIR}/external/libDaisy)
+add_compile_definitions(FILEIO_ENABLE_FATFS_READER)
 add_subdirectory(${LIBDAISY_DIR})
 include(DaisyProject)
 

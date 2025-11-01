@@ -27,4 +27,4 @@
 	url = git@github.com:google/googletest.git
 [submodule "lite/external/DaisySP"]
 	path = lite/external/DaisySP
-	url = git@github.com:electro-smith/DaisySP.git
+	url = git@github.com:hmcty/DaisySP.git
