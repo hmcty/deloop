@@ -24,7 +24,8 @@ static GPIO FOOTSW_C;
 
 static PWMHandle led_pwm;
 constexpr size_t kNumLeds = 16;
-static WS2812B<kNumLeds> led_strip;
+static WS2812B<kNumLeds> led_circle_a;
+static WS2812B<kNumLeds> led_circle_b;
 
 #ifndef DLP_HEADLESS
 static GPIO DC;
@@ -85,8 +86,7 @@ void audio_callback(daisy::AudioHandle::InterleavingInputBuffer in,
 
 int main(void) {
   hw.Init();
-  hw.StartLog(true);
-  hw.PrintLine("Hello\n");
+  hw.StartLog();
 
   hw.SetAudioBlockSize(kAudioBlockSize);
   hw.SetAudioSampleRate(SaiHandle::Config::SampleRate::SAI_48KHZ);
@@ -108,22 +108,27 @@ int main(void) {
       );
   auto result = led_pwm.Init(config);
 
-  PWMHandle::Channel::Config channel_config;
-  channel_config.pin = seed::D16;
-  auto led_channel = led_pwm.Channel4();
-  result = led_channel.Init(channel_config);
+  PWMHandle::Channel::Config channel_config_a;
+  channel_config_a.pin = seed::D24;
+  auto led_channel_a = led_pwm.Channel2();
+  result = led_channel_a.Init(channel_config_a);
 
-  uint32_t tim5_clk = (System::GetPClk1Freq() * 2) / (prescaler + 1);
-
-  hw.PrintLine("TIM5 clock: %u Hz, %u", tim5_clk, prescaler);
+  PWMHandle::Channel::Config channel_config_b;
+  channel_config_b.pin = seed::D16;
+  auto led_channel_b = led_pwm.Channel4();
+  result = led_channel_b.Init(channel_config_b);
 
   // led_channel.Set(0.5f); // 50% brightness
-  led_strip.Init(&led_channel);
+  led_circle_a.Init(&led_channel_a);
+  led_circle_b.Init(&led_channel_b);
 
   int active_led = 0;
-  led_strip.FillColor(0, 0, 0);
-  led_strip.SetPixelColor(active_led, 15, 0, 0);
-  led_strip.Render();
+  led_circle_a.FillColor(0, 0, 0);
+  led_circle_b.FillColor(0, 0, 0);
+  led_circle_a.SetPixelColor(active_led, 5, 0, 0);
+  led_circle_b.SetPixelColor(active_led, 5, 0, 0);
+  led_circle_a.Render();
+  led_circle_b.Render();
   // System::Delay(100);
   // led_strip.Render();
 #ifdef DLP_DAISYSP
@@ -157,16 +162,30 @@ int main(void) {
       hw.SetLed(led_state);
       led_state = !led_state;
 
-      led_strip.SetPixelColor(active_led, 0, 0, 0);
+      led_circle_a.SetPixelColor(active_led, 0, 0, 0);
+      led_circle_b.SetPixelColor(active_led, 0, 0, 0);
       active_led = (active_led + 1) % kNumLeds;
-      led_strip.SetPixelColor(active_led, 15, 0, 0);
-      led_strip.Render();
+      led_circle_a.SetPixelColor(active_led, 5, 0, 0);
+      led_circle_b.SetPixelColor(active_led, 5, 0, 0);
+      led_circle_a.Render();
+      led_circle_b.Render();
     }
 
     dlp_engine_response_t resp;
-    if (dlp_engine_check_response(&resp) == DLP_SUCCESS) {
+    dlp_error_t err = dlp_engine_check_response(&resp);
+    if (err == DLP_SUCCESS) {
       hw.PrintLine("Received response for cmd %d: %d", resp.cmd_id,
                    resp.resp_type);
+    } else if (err == DLP_ENGINE_RESP_TRACK_STATUS) {
+      dlp_track_status_t status = resp.data.track_status;
+      switch (status.id) {
+      case DLP_TRACK_A:
+        break;
+      case DLP_TRACK_B:
+        break;
+      default:
+        break;
+      }
     }
 
     if (FOOTSW_A.Read() != footsw_a_last) {
