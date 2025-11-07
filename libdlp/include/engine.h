@@ -40,11 +40,15 @@ typedef struct dlp_engine_command {
 // RESPONSES ------------------------------------
 typedef enum dlp_engine_response_type {
   DLP_ENGINE_RESP_OK = 0,
+  DLP_ENGINE_RESP_TRACK_STATUS = 1,
 } dlp_engine_response_type_t;
 
 typedef struct dlp_engine_response {
   uint16_t cmd_id;
   dlp_engine_response_type_t resp_type;
+  union {
+    dlp_track_status_t track_status;
+  } data;
 } dlp_engine_response_t;
 
 // API ------------------------------------------

@@ -16,6 +16,7 @@ typedef enum dlp_error {
   DLP_ERROR_RINGBUF_FULL,
   DLP_ERROR_RINGBUF_EMPTY,
   DLP_ERROR_INTERNAL,
+  DLP_ERROR_NO_TRACK_STATUS,
 } dlp_error_t;
 
 #ifdef __cplusplus

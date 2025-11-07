@@ -121,9 +121,21 @@ dlp_error_t dlp_engine_process_audio(const float *const in, float *const out,
   }
 
   memcpy(out, in, nframes * sizeof(float));
+
+  dlp_track_status_t status;
   for (size_t i = 0; i < DLP_NUM_TRACKS; i++) {
-    dlp_track_read(&state_.tracks[i], in, nframes);
-    dlp_track_write(&state_.tracks[i], out, nframes);
+    dlp_track_t *track = &state_.tracks[i];
+    dlp_track_read(track, in, nframes);
+    dlp_track_write(track, out, nframes);
+
+    if (dlp_track_get_status(track, &status) == DLP_SUCCESS) {
+      dlp_engine_response_t resp = {
+          .cmd_id = 0,
+          .resp_type = DLP_ENGINE_RESP_TRACK_STATUS,
+      };
+      resp.data.track_status = status;
+      dlp_ringbuf_push(&state_.resp_rb, &resp);
+    }
   }
 
   dlp_counter_advance_all(nframes);

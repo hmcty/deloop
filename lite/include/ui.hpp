@@ -2,4 +2,5 @@
 
 class UI {
 public:
+  void HandleTrackState()
 }

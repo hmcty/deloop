@@ -56,7 +56,19 @@ typedef struct dlp_track {
   size_t len;
   float *const buffer;
   const size_t capacity;
+
+  // Status updates
+  bool has_status_changed;
+  uint64_t last_status_read;
 } dlp_track_t;
+
+typedef struct dlp_status {
+  const dlp_track_id_t id;
+  dlp_track_state_type_t state;
+  bool overdub_enabled;
+  size_t read_head;
+  size_t len;
+} dlp_track_status_t;
 
 dlp_error_t dlp_track_init(dlp_track_t *track);
 void dlp_track_advance_state(dlp_track_t *track);
@@ -64,6 +76,8 @@ void dlp_track_read(dlp_track_t *track, const float *in, size_t nframes);
 void dlp_track_write(dlp_track_t *track, float *out, size_t nframes);
 dlp_error_t dlp_track_sync_to(dlp_track_t *track, dlp_track_id_t master);
 void dlp_track_clear(dlp_track_t *track);
+dlp_error_t dlp_track_get_status(dlp_track_t *track,
+                                 dlp_track_status_t *status);
 
 #ifdef __cplusplus
 }

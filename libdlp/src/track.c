@@ -11,6 +11,7 @@
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 
 static inline dlp_track_id_t sync_counter(dlp_track_t *track);
+static inline void set_state(dlp_track_t *track, dlp_track_state_type_t state);
 static inline bool is_recording(dlp_track_t *track);
 static inline bool is_stopped(dlp_track_t *track);
 static inline void record(dlp_track_t *track, const float *in, size_t nframes);
@@ -27,6 +28,8 @@ dlp_error_t dlp_track_init(dlp_track_t *track) {
   track->volume = 1.0f;
   track->read_head = 0;
   track->write_head = 0;
+  track->has_status_changed = true;
+  track->last_status_read = 0;
   // TODO: Once errors, check buffer null
   return DLP_SUCCESS;
 }
@@ -48,18 +51,18 @@ void dlp_track_advance_state(dlp_track_t *track) {
 
   switch (track->state) {
   case DLP_TRACK_STATE_IDLE:
-    track->state = DLP_TRACK_STATE_RECORDING_START_QUEUED;
+    set_state(track, DLP_TRACK_STATE_RECORDING_START_QUEUED);
     track->queued_tick = sync_cnt;
     break;
   case DLP_TRACK_STATE_RECORDING:
-    track->state = DLP_TRACK_STATE_RECORDING_STOP_QUEUED;
+    set_state(track, DLP_TRACK_STATE_RECORDING_STOP_QUEUED);
     track->queued_tick = sync_cnt;
     break;
   case DLP_TRACK_STATE_PLAYING:
-    track->state = DLP_TRACK_STATE_PAUSED;
+    set_state(track, DLP_TRACK_STATE_PAUSED);
     break;
   case DLP_TRACK_STATE_PAUSED:
-    track->state = DLP_TRACK_STATE_PLAYING_START_QUEUED;
+    set_state(track, DLP_TRACK_STATE_PLAYING_START_QUEUED);
     track->queued_tick = sync_cnt;
     break;
   case DLP_TRACK_STATE_RECORDING_START_QUEUED:
@@ -87,7 +90,7 @@ void dlp_track_read(dlp_track_t *track, const float *in, size_t nframes) {
     }
 
     uint64_t record_from = (start < queued_tick) ? queued_tick - start : 0;
-    track->state = DLP_TRACK_STATE_RECORDING;
+    set_state(track, DLP_TRACK_STATE_RECORDING);
     record(track, &in[record_from], nframes - record_from);
     dlp_counter_set_cnt(track->id, track->len - record_from);
     break;
@@ -100,7 +103,7 @@ void dlp_track_read(dlp_track_t *track, const float *in, size_t nframes) {
     }
 
     uint64_t record_to = (start < queued_tick) ? queued_tick - start : 0;
-    track->state = DLP_TRACK_STATE_PLAYING_START_QUEUED;
+    set_state(track, DLP_TRACK_STATE_PLAYING_START_QUEUED);
     record(track, in, record_to);
     if (track->overdub_enabled) {
       overdub(track, &in[record_to], nframes - record_to);
@@ -137,7 +140,7 @@ void dlp_track_write(dlp_track_t *track, float *out, size_t nframes) {
   uint64_t queued_tick = track->queued_tick;
   if (track->state == DLP_TRACK_STATE_PLAYING_START_QUEUED &&
       end > queued_tick) {
-    track->state = DLP_TRACK_STATE_PLAYING;
+    set_state(track, DLP_TRACK_STATE_PLAYING);
     play_from = (start < track->queued_tick) ? track->queued_tick - start : 0;
   }
 
@@ -180,6 +183,31 @@ void dlp_track_clear(dlp_track_t *track) {
   dlp_counter_set_len(track->id, 0);
 }
 
+dlp_error_t dlp_track_get_status(dlp_track_t *track,
+                                 dlp_track_status_t *status) {
+  if (track == NULL) {
+    return DLP_ERROR_INVALID_ARGUMENT;
+  }
+
+  uint64_t ctr_id = sync_counter(track);
+  uint64_t tick = dlp_counter_absolute(ctr_id);
+  if (!track->has_status_changed ||
+      (tick - track->last_status_read) >= (48000 / 2)) {
+    return DLP_ERROR_NO_TRACK_STATUS;
+  }
+
+  track->has_status_changed = false;
+  track->last_status_read = tick;
+
+  status->id = track->id;
+  status->state = track->state;
+  status->overdub_enabled = track->overdub_enabled;
+  status->read_head = track->read_head;
+  status->led = track->len;
+
+  return DLP_SUCCESS;
+}
+
 static inline dlp_track_id_t sync_counter(dlp_track_t *track) {
   switch (track->sync.mode) {
   case DLP_SYNC_MASTER:
@@ -189,6 +217,11 @@ static inline dlp_track_id_t sync_counter(dlp_track_t *track) {
   default:
     return track->id;
   }
+}
+
+static inline void set_state(dlp_track_t *track, dlp_track_state_type_t state) {
+  track->has_status_changed = true;
+  track->state = state;
 }
 
 static inline bool is_recording(dlp_track_t *track) {
