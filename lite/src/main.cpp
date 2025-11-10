@@ -1,14 +1,15 @@
 #include "fatfs.h"
 #include <daisy_seed.h>
 #include <ff.h>
-#include <ratio>
 
 #ifdef DLP_DAISYSP
 #include <daisysp.h>
 #endif
 
 #include "WS2812B.hpp"
+#include "cli.hpp"
 #include "engine.h"
+#include "ui.hpp"
 
 using namespace daisy;
 
@@ -29,8 +30,9 @@ static GPIO FOOTSW_C;
 
 static PWMHandle led_pwm;
 constexpr size_t kNumLeds = 16;
-static WS2812B<kNumLeds> led_circle_a;
-static WS2812B<kNumLeds> led_circle_b;
+static Ui ui;
+// static WS2812B<kNumLeds> led_circle_a;
+// static WS2812B<kNumLeds> led_circle_b;
 
 static float input_gain = 1.0f;
 static float gain_buffer[kAudioBufferSize];
@@ -85,55 +87,57 @@ void audio_callback(daisy::AudioHandle::InterleavingInputBuffer in,
 
 int main(void) {
   hw.Init();
-  hw.StartLog(true);
+  hw.StartLog();
+  hw.usb_handle.SetReceiveCallback(cli::UsbCallback,
+                                   UsbHandle::UsbPeriph::FS_INTERNAL);
 
-  SdmmcHandler::Config sdcfg;
-  sdcfg.Defaults();
-  sdcfg.speed = SdmmcHandler::Speed::STANDARD;
-  sdcfg.width = SdmmcHandler::BusWidth::BITS_1;
-  sdmmc.Init(sdcfg);
+  // SdmmcHandler::Config sdcfg;
+  // sdcfg.Defaults();
+  // sdcfg.speed = SdmmcHandler::Speed::STANDARD;
+  // sdcfg.width = SdmmcHandler::BusWidth::BITS_1;
+  // sdmmc.Init(sdcfg);
 
-  fsi.Init(FatFSInterface::Config::MEDIA_SD);
-  FATFS &fs = fsi.GetSDFileSystem();
-  FRESULT fr = f_mount(&fs, "/", 1 /* mount now */);
-  if (fr != FR_OK) {
-    if (fr == FR_NO_FILESYSTEM) {
-      hw.PrintLine("No filesystem found on SD card. Making one.");
-      fr = f_mkfs("/", FM_FAT32, 0, &sd_buffer, sizeof(sd_buffer));
-      if (fr == FR_OK) {
-        hw.PrintLine("Filesystem created. Mounting...");
-        fr = f_mount(&fs, "/", 1 /* mount now */);
-        if (fr == FR_OK) {
-          hw.PrintLine("SD card mounted successfully.");
-        }
-      } else {
-        hw.PrintLine("Failed to create filesystem: %d", fr);
-      }
-    } else {
-      hw.PrintLine("Failed to mount SD card: %d", fr);
-    }
-  } else {
-    hw.PrintLine("SD card mounted successfully.");
-  }
+  // fsi.Init(FatFSInterface::Config::MEDIA_SD);
+  // FATFS &fs = fsi.GetSDFileSystem();
+  // FRESULT fr = f_mount(&fs, "/", 1 /* mount now */);
+  // if (fr != FR_OK) {
+  //   if (fr == FR_NO_FILESYSTEM) {
+  //     hw.PrintLine("No filesystem found on SD card. Making one.");
+  //     fr = f_mkfs("/", FM_FAT32, 0, &sd_buffer, sizeof(sd_buffer));
+  //     if (fr == FR_OK) {
+  //       hw.PrintLine("Filesystem created. Mounting...");
+  //       fr = f_mount(&fs, "/", 1 /* mount now */);
+  //       if (fr == FR_OK) {
+  //         hw.PrintLine("SD card mounted successfully.");
+  //       }
+  //     } else {
+  //       hw.PrintLine("Failed to create filesystem: %d", fr);
+  //     }
+  //   } else {
+  //     hw.PrintLine("Failed to mount SD card: %d", fr);
+  //   }
+  // } else {
+  //   hw.PrintLine("SD card mounted successfully.");
+  // }
 
   // f_mkdir("testfolder");
 
   // Print root directories
-  FILINFO fno;
-  DIR dir;
-  fr = f_opendir(&dir, "/");
-  if (fr == FR_OK) {
-    hw.PrintLine("Root directory contents:");
-    for (;;) {
-      fr = f_readdir(&dir, &fno);
-      if (fr != FR_OK || fno.fname[0] == 0)
-        break;
-      hw.PrintLine("  %s", fno.fname);
-    }
-    f_closedir(&dir);
-  } else {
-    hw.PrintLine("Failed to open root directory: %d", fr);
-  }
+  // FILINFO fno;
+  // DIR dir;
+  // fr = f_opendir(&dir, "/");
+  // if (fr == FR_OK) {
+  //   hw.PrintLine("Root directory contents:");
+  //   for (;;) {
+  //     fr = f_readdir(&dir, &fno);
+  //     if (fr != FR_OK || fno.fname[0] == 0)
+  //       break;
+  //     hw.PrintLine("  %s", fno.fname);
+  //   }
+  //   f_closedir(&dir);
+  // } else {
+  //   hw.PrintLine("Failed to open root directory: %d", fr);
+  // }
 
   hw.SetAudioBlockSize(kAudioBlockSize);
   hw.SetAudioSampleRate(SaiHandle::Config::SampleRate::SAI_48KHZ);
@@ -157,30 +161,17 @@ int main(void) {
 
   PWMHandle::Channel::Config channel_config_a;
   channel_config_a.pin = seed::D24;
-  auto led_channel_a = led_pwm.Channel2();
-  result = led_channel_a.Init(channel_config_a);
+  led_pwm.Channel2().Init(channel_config_a);
 
   PWMHandle::Channel::Config channel_config_b;
   channel_config_b.pin = seed::D16;
-  auto led_channel_b = led_pwm.Channel4();
-  result = led_channel_b.Init(channel_config_b);
+  led_pwm.Channel4().Init(channel_config_b);
 
-  // led_channel.Set(0.5f); // 50% brightness
-  led_circle_a.Init(&led_channel_a);
-  led_circle_b.Init(&led_channel_b);
+  ui.Init(&led_pwm.Channel2(), &led_pwm.Channel4());
+  cli::Init();
 
-  int active_led = 0;
-  led_circle_a.FillColor(0, 0, 0);
-  led_circle_b.FillColor(0, 0, 0);
-  led_circle_a.SetPixelColor(active_led, 5, 0, 0);
-  led_circle_b.SetPixelColor(active_led, 5, 0, 0);
-  led_circle_a.Render();
-  led_circle_b.Render();
-  // System::Delay(100);
-  // led_strip.Render();
 #ifdef DLP_DAISYSP
   // Initialize DaisySP components
-
 #else
   dlp_engine_init();
 #endif // DLP_DAISYSP
@@ -194,18 +185,13 @@ int main(void) {
   bool footsw_b_last = true;
   bool footsw_c_last = true;
   while (1) {
+    cli::Step(System::GetNow(), hw);
+    ui.Step(System::GetNow());
+
     if (System::GetNow() - last > 500) {
       last = System::GetNow();
       hw.SetLed(led_state);
       led_state = !led_state;
-
-      led_circle_a.SetPixelColor(active_led, 0, 0, 0);
-      led_circle_b.SetPixelColor(active_led, 0, 0, 0);
-      active_led = (active_led + 1) % kNumLeds;
-      led_circle_a.SetPixelColor(active_led, 5, 0, 0);
-      led_circle_b.SetPixelColor(active_led, 5, 0, 0);
-      led_circle_a.Render();
-      led_circle_b.Render();
     }
 
     dlp_engine_response_t resp;

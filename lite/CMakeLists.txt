@@ -13,14 +13,6 @@ if (BUILD_TESTS)
   enable_testing()
 endif()
 
-# LVGL
-if (NOT DLP_HEADLESS)
-  set(LV_BUILD_CONF_DIR
-    ${PROJECT_SOURCE_DIR}/include
-    CACHE PATH "Path to LVGL build configuration directory")
-  add_subdirectory(external/lvgl)
-endif()
-
 # libdlp
 add_subdirectory(../libdlp libdlp_build)
 
@@ -29,13 +21,9 @@ set(FIRMWARE_NAME "${PROJECT_NAME}")
 set(FIRMWARE_SOURCES
   src/main.cpp
   src/WS2812B.cpp
+  src/ui.cpp
+  src/cli.cpp
 )
-if (NOT DLP_HEADLESS)
-  list(APPEND FIRMWARE_SOURCES
-    src/GC9A01.cpp
-    src/display.cpp
-  )
-endif()
 
 if (DLP_DAISYSP)
   set(DAISYSP_DIR ${CMAKE_CURRENT_LIST_DIR}/external/DaisySP)
@@ -52,11 +40,7 @@ include(DaisyProject)
 
 target_include_directories(${FIRMWARE_NAME} PRIVATE ${CMAKE_CURRENT_LIST_DIR}/include)
 target_link_libraries(${FIRMWARE_NAME} PRIVATE dlp)
-if (NOT DLP_HEADLESS)
-  target_link_libraries(${FIRMWARE_NAME} PRIVATE lvgl)
-else()
-  target_compile_definitions(${FIRMWARE_NAME} PRIVATE DLP_HEADLESS)
-endif()
+target_compile_definitions(${FIRMWARE_NAME} PRIVATE DLP_HEADLESS)
 
 if (DLP_DAISYSP)
   target_compile_definitions(${FIRMWARE_NAME} PRIVATE DLP_DAISYSP)

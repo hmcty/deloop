@@ -11,9 +11,7 @@
       "cacheVariables": {
         "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/cmake/ArmGNUToolchain.cmake",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
-        "DAISY_STORAGE": "qspi",
-        "CONFIG_LV_BUILD_DEMOS": "OFF",
-        "CONFIG_LV_BUILD_EXAMPLES": "OFF"
+        "DAISY_STORAGE": "qspi"
       }
     }
   ]
