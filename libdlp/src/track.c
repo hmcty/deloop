@@ -203,7 +203,7 @@ dlp_error_t dlp_track_get_status(dlp_track_t *track,
   status->state = track->state;
   status->overdub_enabled = track->overdub_enabled;
   status->read_head = track->read_head;
-  status->led = track->len;
+  status->len = track->len;
 
   return DLP_SUCCESS;
 }

@@ -1,4 +1,6 @@
+#include "fatfs.h"
 #include <daisy_seed.h>
+#include <ff.h>
 #include <ratio>
 
 #ifdef DLP_DAISYSP
@@ -6,13 +8,16 @@
 #endif
 
 #include "WS2812B.hpp"
-#include "display.hpp"
 #include "engine.h"
 
 using namespace daisy;
 
 constexpr size_t kAudioBlockSize = 48;
 constexpr size_t kAudioBufferSize = kAudioBlockSize * 2;
+
+FatFSInterface fsi;
+static SdmmcHandler sdmmc;
+static uint8_t sd_buffer[_MAX_SS];
 
 DaisySeed hw;
 // static Switch FOOTSW_A;
@@ -26,12 +31,6 @@ static PWMHandle led_pwm;
 constexpr size_t kNumLeds = 16;
 static WS2812B<kNumLeds> led_circle_a;
 static WS2812B<kNumLeds> led_circle_b;
-
-#ifndef DLP_HEADLESS
-static GPIO DC;
-static GPIO RST;
-static SpiHandle spi_handle;
-#endif
 
 static float input_gain = 1.0f;
 static float gain_buffer[kAudioBufferSize];
@@ -86,7 +85,55 @@ void audio_callback(daisy::AudioHandle::InterleavingInputBuffer in,
 
 int main(void) {
   hw.Init();
-  hw.StartLog();
+  hw.StartLog(true);
+
+  SdmmcHandler::Config sdcfg;
+  sdcfg.Defaults();
+  sdcfg.speed = SdmmcHandler::Speed::STANDARD;
+  sdcfg.width = SdmmcHandler::BusWidth::BITS_1;
+  sdmmc.Init(sdcfg);
+
+  fsi.Init(FatFSInterface::Config::MEDIA_SD);
+  FATFS &fs = fsi.GetSDFileSystem();
+  FRESULT fr = f_mount(&fs, "/", 1 /* mount now */);
+  if (fr != FR_OK) {
+    if (fr == FR_NO_FILESYSTEM) {
+      hw.PrintLine("No filesystem found on SD card. Making one.");
+      fr = f_mkfs("/", FM_FAT32, 0, &sd_buffer, sizeof(sd_buffer));
+      if (fr == FR_OK) {
+        hw.PrintLine("Filesystem created. Mounting...");
+        fr = f_mount(&fs, "/", 1 /* mount now */);
+        if (fr == FR_OK) {
+          hw.PrintLine("SD card mounted successfully.");
+        }
+      } else {
+        hw.PrintLine("Failed to create filesystem: %d", fr);
+      }
+    } else {
+      hw.PrintLine("Failed to mount SD card: %d", fr);
+    }
+  } else {
+    hw.PrintLine("SD card mounted successfully.");
+  }
+
+  // f_mkdir("testfolder");
+
+  // Print root directories
+  FILINFO fno;
+  DIR dir;
+  fr = f_opendir(&dir, "/");
+  if (fr == FR_OK) {
+    hw.PrintLine("Root directory contents:");
+    for (;;) {
+      fr = f_readdir(&dir, &fno);
+      if (fr != FR_OK || fno.fname[0] == 0)
+        break;
+      hw.PrintLine("  %s", fno.fname);
+    }
+    f_closedir(&dir);
+  } else {
+    hw.PrintLine("Failed to open root directory: %d", fr);
+  }
 
   hw.SetAudioBlockSize(kAudioBlockSize);
   hw.SetAudioSampleRate(SaiHandle::Config::SampleRate::SAI_48KHZ);
@@ -139,16 +186,6 @@ int main(void) {
 #endif // DLP_DAISYSP
 
   hw.StartAudio(audio_callback);
-
-#ifndef DLP_HEADLESS
-  // Configure display
-  DC.Init(seed::D11, GPIO::Mode::OUTPUT, GPIO::Pull::NOPULL,
-          GPIO::Speed::VERY_HIGH);
-  RST.Init(seed::D12, GPIO::Mode::OUTPUT, GPIO::Pull::PULLUP,
-           GPIO::Speed::MEDIUM);
-  spi_handle.Init(default_spi_config());
-  setup_display(&spi_handle, &DC, &RST);
-#endif
 
   uint32_t last = System::GetNow();
   bool led_state = true;
@@ -219,10 +256,6 @@ int main(void) {
         dlp_engine_send_command(&cmd);
       }
     }
-
-#ifndef DLP_HEADLESS
-    display_tick();
-#endif
 
     System::Delay(10);
   }

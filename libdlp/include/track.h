@@ -63,7 +63,7 @@ typedef struct dlp_track {
 } dlp_track_t;
 
 typedef struct dlp_status {
-  const dlp_track_id_t id;
+  dlp_track_id_t id;
   dlp_track_state_type_t state;
   bool overdub_enabled;
   size_t read_head;

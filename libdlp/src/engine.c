@@ -129,11 +129,9 @@ dlp_error_t dlp_engine_process_audio(const float *const in, float *const out,
     dlp_track_write(track, out, nframes);
 
     if (dlp_track_get_status(track, &status) == DLP_SUCCESS) {
-      dlp_engine_response_t resp = {
-          .cmd_id = 0,
-          .resp_type = DLP_ENGINE_RESP_TRACK_STATUS,
-      };
-      resp.data.track_status = status;
+      dlp_engine_response_t resp = {.cmd_id = 0,
+                                    .resp_type = DLP_ENGINE_RESP_TRACK_STATUS,
+                                    .data = {.track_status = status}};
       dlp_ringbuf_push(&state_.resp_rb, &resp);
     }
   }
