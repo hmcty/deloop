@@ -28,3 +28,9 @@
 [submodule "lite/external/DaisySP"]
 	path = lite/external/DaisySP
 	url = git@github.com:hmcty/DaisySP.git
+[submodule "lite/external/json"]
+	path = lite/external/json
+	url = git@github.com:nlohmann/json.git
+[submodule "lite/external/zlib"]
+	path = lite/external/zlib
+	url = git@github.com:madler/zlib.git

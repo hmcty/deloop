@@ -13,6 +13,13 @@ if (BUILD_TESTS)
   enable_testing()
 endif()
 
+# zlib
+set(ZLIB_BUILD_SHARED OFF)
+set(ZLIB_BUILD_TESTING OFF)
+set(ZLIB_BUILD_MINIZIP OFF)
+set(ZLIB_INSTALL OFF)
+add_subdirectory(${CMAKE_SOURCE_DIR}/external/zlib zlib)
+
 # libdlp
 add_subdirectory(../libdlp libdlp_build)
 
@@ -23,6 +30,8 @@ set(FIRMWARE_SOURCES
   src/WS2812B.cpp
   src/ui.cpp
   src/cli.cpp
+  src/fs.cpp
+  src/metadata.cpp
 )
 
 if (DLP_DAISYSP)
@@ -39,7 +48,7 @@ add_subdirectory(${LIBDAISY_DIR})
 include(DaisyProject)
 
 target_include_directories(${FIRMWARE_NAME} PRIVATE ${CMAKE_CURRENT_LIST_DIR}/include)
-target_link_libraries(${FIRMWARE_NAME} PRIVATE dlp)
+target_link_libraries(${FIRMWARE_NAME} PRIVATE dlp zlibstatic)
 target_compile_definitions(${FIRMWARE_NAME} PRIVATE DLP_HEADLESS)
 
 if (DLP_DAISYSP)
@@ -48,6 +57,13 @@ endif()
 
 # Custom targets to flash via dfu-util
 add_custom_target(dfu_app
+  COMMAND dfu-util -a 0 -s 0x90040000:leave -D ${FIRMWARE_NAME}.bin -d ,0483:df11
+  DEPENDS ${FIRMWARE_NAME}
+  COMMENT "Flashing external storage via dfu-util"
+)
+
+add_custom_target(dfu_cmd_app
+  COMMAND echo -ne "@RST\r\n"  > "/dev/serial/by-id/*Daisy_Seed*"
   COMMAND dfu-util -a 0 -s 0x90040000:leave -D ${FIRMWARE_NAME}.bin -d ,0483:df11
   DEPENDS ${FIRMWARE_NAME}
   COMMENT "Flashing external storage via dfu-util"

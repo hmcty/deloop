@@ -1,24 +1,23 @@
-#include "fatfs.h"
 #include <daisy_seed.h>
 #include <ff.h>
+#include <hid/logger.h>
+
+#include "fatfs.h"
 
 #ifdef DLP_DAISYSP
 #include <daisysp.h>
 #endif
 
-#include "WS2812B.hpp"
 #include "cli.hpp"
 #include "engine.h"
+#include "fs.hpp"
+#include "logging.hpp"
 #include "ui.hpp"
 
 using namespace daisy;
 
 constexpr size_t kAudioBlockSize = 48;
 constexpr size_t kAudioBufferSize = kAudioBlockSize * 2;
-
-FatFSInterface fsi;
-static SdmmcHandler sdmmc;
-static uint8_t sd_buffer[_MAX_SS];
 
 DaisySeed hw;
 // static Switch FOOTSW_A;
@@ -42,23 +41,24 @@ static daisysp::SquareNoise osc;
 static float phase = 0.0f;
 #endif
 
-SpiHandle::Config default_spi_config() {
-  SpiHandle::Config spi_conf;
-  spi_conf.mode = SpiHandle::Config::Mode::MASTER;
-  spi_conf.periph = SpiHandle::Config::Peripheral::SPI_1;
+void deloop::LogInternal(deloop::LogLevel level, const char* format, ...) {
+  switch (level) {
+    case deloop::LogLevel::INFO:
+      Logger<LOGGER_INTERNAL>::Print("[INFO][%d] ", System::GetNow());
+      break;
+    case deloop::LogLevel::WARN:
+      Logger<LOGGER_INTERNAL>::Print("[WARN][%d] ", System::GetNow());
+      break;
+    case deloop::LogLevel::ERROR:
+      Logger<LOGGER_INTERNAL>::Print("[ERROR][%d] ", System::GetNow());
+      break;
+  }
+  daisy::System::Delay(5);
 
-  // At 8 and below, transactions become unreliable
-  spi_conf.baud_prescaler = SpiHandle::Config::BaudPrescaler::PS_16;
-
-  spi_conf.pin_config.sclk = seed::D8;
-  spi_conf.pin_config.miso = Pin();
-  spi_conf.pin_config.mosi = seed::D10;
-  spi_conf.pin_config.nss = seed::D7;
-
-  spi_conf.direction = SpiHandle::Config::Direction::TWO_LINES_TX_ONLY;
-  spi_conf.nss = SpiHandle::Config::NSS::HARD_OUTPUT;
-
-  return spi_conf;
+  va_list va;
+  va_start(va, format);
+  Logger<LOGGER_INTERNAL>::PrintLineV(format, va);
+  va_end(va);
 }
 
 void audio_callback(daisy::AudioHandle::InterleavingInputBuffer in,
@@ -78,7 +78,7 @@ void audio_callback(daisy::AudioHandle::InterleavingInputBuffer in,
   }
 
   dlp_engine_process_audio(gain_buffer, out, size);
-#endif // DLP_DAISYSP
+#endif  // DLP_DAISYSP
 
   for (size_t i = 0; i < size; i++) {
     out[i] = fmaxf(fminf(out[i], 1.0f), -1.0f);
@@ -90,54 +90,6 @@ int main(void) {
   hw.StartLog();
   hw.usb_handle.SetReceiveCallback(cli::UsbCallback,
                                    UsbHandle::UsbPeriph::FS_INTERNAL);
-
-  // SdmmcHandler::Config sdcfg;
-  // sdcfg.Defaults();
-  // sdcfg.speed = SdmmcHandler::Speed::STANDARD;
-  // sdcfg.width = SdmmcHandler::BusWidth::BITS_1;
-  // sdmmc.Init(sdcfg);
-
-  // fsi.Init(FatFSInterface::Config::MEDIA_SD);
-  // FATFS &fs = fsi.GetSDFileSystem();
-  // FRESULT fr = f_mount(&fs, "/", 1 /* mount now */);
-  // if (fr != FR_OK) {
-  //   if (fr == FR_NO_FILESYSTEM) {
-  //     hw.PrintLine("No filesystem found on SD card. Making one.");
-  //     fr = f_mkfs("/", FM_FAT32, 0, &sd_buffer, sizeof(sd_buffer));
-  //     if (fr == FR_OK) {
-  //       hw.PrintLine("Filesystem created. Mounting...");
-  //       fr = f_mount(&fs, "/", 1 /* mount now */);
-  //       if (fr == FR_OK) {
-  //         hw.PrintLine("SD card mounted successfully.");
-  //       }
-  //     } else {
-  //       hw.PrintLine("Failed to create filesystem: %d", fr);
-  //     }
-  //   } else {
-  //     hw.PrintLine("Failed to mount SD card: %d", fr);
-  //   }
-  // } else {
-  //   hw.PrintLine("SD card mounted successfully.");
-  // }
-
-  // f_mkdir("testfolder");
-
-  // Print root directories
-  // FILINFO fno;
-  // DIR dir;
-  // fr = f_opendir(&dir, "/");
-  // if (fr == FR_OK) {
-  //   hw.PrintLine("Root directory contents:");
-  //   for (;;) {
-  //     fr = f_readdir(&dir, &fno);
-  //     if (fr != FR_OK || fno.fname[0] == 0)
-  //       break;
-  //     hw.PrintLine("  %s", fno.fname);
-  //   }
-  //   f_closedir(&dir);
-  // } else {
-  //   hw.PrintLine("Failed to open root directory: %d", fr);
-  // }
 
   hw.SetAudioBlockSize(kAudioBlockSize);
   hw.SetAudioSampleRate(SaiHandle::Config::SampleRate::SAI_48KHZ);
@@ -154,8 +106,8 @@ int main(void) {
   uint32_t prescaler = 0;
   auto config =
       PWMHandle::Config(PWMHandle::Config::Peripheral::TIM_5,
-                        prescaler, // prescaler
-                        249        // period (at 200MHz, gives 800KHz PWM freq)
+                        prescaler,  // prescaler
+                        249         // period (at 200MHz, gives 800KHz PWM freq)
       );
   auto result = led_pwm.Init(config);
 
@@ -169,12 +121,13 @@ int main(void) {
 
   ui.Init(&led_pwm.Channel2(), &led_pwm.Channel4());
   cli::Init();
+  fs::init();
 
 #ifdef DLP_DAISYSP
   // Initialize DaisySP components
 #else
   dlp_engine_init();
-#endif // DLP_DAISYSP
+#endif  // DLP_DAISYSP
 
   hw.StartAudio(audio_callback);
 
@@ -185,7 +138,7 @@ int main(void) {
   bool footsw_b_last = true;
   bool footsw_c_last = true;
   while (1) {
-    cli::Step(System::GetNow(), hw);
+    cli::Step(System::GetNow());
     ui.Step(System::GetNow());
 
     if (System::GetNow() - last > 500) {
@@ -202,12 +155,12 @@ int main(void) {
     } else if (err == DLP_ENGINE_RESP_TRACK_STATUS) {
       dlp_track_status_t status = resp.data.track_status;
       switch (status.id) {
-      case DLP_TRACK_A:
-        break;
-      case DLP_TRACK_B:
-        break;
-      default:
-        break;
+        case DLP_TRACK_A:
+          break;
+        case DLP_TRACK_B:
+          break;
+        default:
+          break;
       }
     }
 
